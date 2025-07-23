@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { publicProcedure } from "../../../create-context";
-import { supabaseAdmin } from "../../../lib/supabase";
+import { publicProcedure } from "../../create-context";
+import { supabaseAdmin } from "../../lib/supabase";
 
 export default publicProcedure
   .input(z.object({ userId: z.string() }))
