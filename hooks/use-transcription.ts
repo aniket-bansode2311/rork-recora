@@ -136,7 +136,7 @@ export function useTranscription() {
       
       // Process ElevenLabs response format
       if (result.segments && Array.isArray(result.segments)) {
-        const speakers: string[] = [...new Set(result.segments.map((seg: any) => seg.speaker))];
+        const speakers: string[] = [...new Set(result.segments.map((seg: any) => seg.speaker).filter((speaker: any): speaker is string => typeof speaker === 'string'))];
         const fullText = result.segments.map((seg: any) => `${seg.speaker}: ${seg.text}`).join('\n');
         
         return {
