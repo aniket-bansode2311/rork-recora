@@ -40,8 +40,9 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
     { userId: user?.id || '' },
     { 
       enabled: !!user?.id,
-      retry: 2,
+      retry: 1,
       staleTime: 30000,
+      refetchOnWindowFocus: false,
     }
   );
 
@@ -87,7 +88,7 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
     onSuccess: (data, variables, context) => {
       queryClient.setQueryData([['notes', 'list'], { input: { userId: user?.id || '' } }], (old: Note[] | undefined) => {
         const oldData = old || [];
-        return deduplicateNotes(oldData.map(n => n.id === variables.id ? {
+        return deduplicateNotes(oldData.map((n: Note) => n.id === variables.id ? {
           id: data.note.id,
           title: data.note.title,
           content: data.note.content,
@@ -149,7 +150,7 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
       
       queryClient.setQueryData([['notes', 'list'], { input: { userId: user?.id || '' } }], (old: Note[] | undefined) => {
         const oldData = old || [];
-        return oldData.map(note => 
+        return oldData.map((note: Note) => 
           note.id === updatedNote.id 
             ? { 
                 ...note, 
@@ -214,7 +215,7 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
       const previousNotes = queryClient.getQueryData([['notes', 'list'], { input: { userId: user?.id || '' } }]);
       
       queryClient.setQueryData([['notes', 'list'], { input: { userId: user?.id || '' } }], (old: Note[] | undefined) => {
-        return (old || []).filter(note => note.id !== deleteVars.id);
+        return (old || []).filter((note: Note) => note.id !== deleteVars.id);
       });
       
       return { previousNotes };

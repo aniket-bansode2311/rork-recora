@@ -40,8 +40,9 @@ export const [RecordingsProvider, useRecordings] = createContextHook(() => {
     { userId: user?.id || '' },
     { 
       enabled: !!user?.id,
-      retry: 2,
+      retry: 1,
       staleTime: 30000,
+      refetchOnWindowFocus: false,
     }
   );
 
@@ -84,7 +85,7 @@ export const [RecordingsProvider, useRecordings] = createContextHook(() => {
     onSuccess: (data, variables, context) => {
       queryClient.setQueryData([['recordings', 'list'], { input: { userId: user?.id || '' } }], (old: Recording[] | undefined) => {
         const oldData = old || [];
-        return deduplicateRecordings(oldData.map(r => r.id === variables.id ? {
+        return deduplicateRecordings(oldData.map((r: Recording) => r.id === variables.id ? {
           id: data.recording.id,
           uri: data.recording.uri,
           duration: data.recording.duration,
@@ -140,7 +141,7 @@ export const [RecordingsProvider, useRecordings] = createContextHook(() => {
       
       queryClient.setQueryData([['recordings', 'list'], { input: { userId: user?.id || '' } }], (old: Recording[] | undefined) => {
         const oldData = old || [];
-        return oldData.map(recording => 
+        return oldData.map((recording: Recording) => 
           recording.id === updatedRecording.id 
             ? { 
                 ...recording, 
@@ -199,7 +200,7 @@ export const [RecordingsProvider, useRecordings] = createContextHook(() => {
       const previousRecordings = queryClient.getQueryData([['recordings', 'list'], { input: { userId: user?.id || '' } }]);
       
       queryClient.setQueryData([['recordings', 'list'], { input: { userId: user?.id || '' } }], (old: Recording[] | undefined) => {
-        return (old || []).filter(recording => recording.id !== deleteVars.id);
+        return (old || []).filter((recording: Recording) => recording.id !== deleteVars.id);
       });
       
       return { previousRecordings };
