@@ -1,8 +1,10 @@
 export interface SpeakerSegment {
   speaker: string;
   text: string;
+  translated_text?: string;
   start_time: number;
   end_time: number;
+  language?: string;
 }
 
 export interface Recording {
@@ -13,6 +15,8 @@ export interface Recording {
   createdAt: Date;
   fileType: string;
   transcription?: string;
+  translatedTranscription?: string;
+  detectedLanguage?: string;
   speakerSegments?: SpeakerSegment[];
   speakers?: string[];
 }

@@ -14,7 +14,7 @@ import { Recording } from "@/types/recording";
 export default function HistoryScreen() {
   const { recordings, deleteRecording, addRecording, updateRecording, isLoading } = useRecordings();
   const { colors } = useTheme();
-  const { transcribeAudio, transcribeWithSpeakers, isTranscribing, isDiarizing } = useTranscription();
+  const { transcribeAudio, transcribeAndTranslateAudio, transcribeWithSpeakers, isTranscribing, isDiarizing, isTranslating } = useTranscription();
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [isPaused, setIsPaused] = useState(false);
@@ -138,10 +138,15 @@ export default function HistoryScreen() {
       return;
     }
 
-    // Transcribe the audio
-    const transcription = await transcribeAudio(recording);
-    if (transcription) {
-      const updatedRecording = { ...recording, transcription };
+    // Use multi-language transcription with translation
+    const result = await transcribeAndTranslateAudio(recording);
+    if (result) {
+      const updatedRecording = { 
+        ...recording, 
+        transcription: result.original_text,
+        translatedTranscription: result.translated_text,
+        detectedLanguage: result.detected_language
+      };
       updateRecording(updatedRecording);
       setSelectedRecording(updatedRecording);
       setShowTranscriptionModal(true);
@@ -156,12 +161,14 @@ export default function HistoryScreen() {
       return;
     }
 
-    // Transcribe with speaker diarization
+    // Transcribe with speaker diarization (now includes multi-language support)
     const result = await transcribeWithSpeakers(recording);
     if (result) {
       const updatedRecording = { 
         ...recording, 
         transcription: result.full_text,
+        translatedTranscription: result.translated_full_text,
+        detectedLanguage: result.detected_language,
         speakerSegments: result.segments,
         speakers: result.speakers
       };
@@ -267,7 +274,7 @@ export default function HistoryScreen() {
                 onRename={handleRename}
                 onTranscribe={handleTranscribe}
                 onTranscribeWithSpeakers={handleTranscribeWithSpeakers}
-                isTranscribing={isTranscribing === item.id}
+                isTranscribing={isTranscribing === item.id || isTranslating === item.id}
                 isDiarizing={isDiarizing === item.id}
                 isPlaying={playingId === item.id && !isPaused}
                 isPaused={playingId === item.id && isPaused}

@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { StyleSheet, Text, View, Pressable, ActivityIndicator, TextInput, Alert } from "react-native";
-import { Trash2, Play, Pause, FileText, Edit3, Check, X, Users } from "lucide-react-native";
+import { Trash2, Play, Pause, FileText, Edit3, Check, X, Users, Globe } from "lucide-react-native";
 import { useTheme } from "@/hooks/use-theme";
 import { Recording } from "@/types/recording";
 
@@ -154,16 +154,25 @@ export default function RecordingItem({
           {formattedDate} • {formattedTime} • {formatDuration(recording.duration)}
         </Text>
         
-        {getTranscriptionStatus() && (
-          <View style={[styles.transcriptionBadge, { 
-            backgroundColor: recording.speakerSegments ? colors.purple.primary : colors.purple.light 
-          }]}>
-            {recording.speakerSegments && (
-              <Users size={12} color="#fff" style={styles.badgeIcon} />
-            )}
-            <Text style={styles.transcriptionBadgeText}>{getTranscriptionStatus()}</Text>
-          </View>
-        )}
+        <View style={styles.badgesContainer}>
+          {recording.detectedLanguage && (
+            <View style={[styles.languageBadge, { backgroundColor: colors.blue.primary }]}>
+              <Globe size={10} color="#fff" style={styles.badgeIcon} />
+              <Text style={styles.languageBadgeText}>{recording.detectedLanguage}</Text>
+            </View>
+          )}
+          
+          {getTranscriptionStatus() && (
+            <View style={[styles.transcriptionBadge, { 
+              backgroundColor: recording.speakerSegments ? colors.purple.primary : colors.purple.light 
+            }]}>
+              {recording.speakerSegments && (
+                <Users size={12} color="#fff" style={styles.badgeIcon} />
+              )}
+              <Text style={styles.transcriptionBadgeText}>{getTranscriptionStatus()}</Text>
+            </View>
+          )}
+        </View>
       </View>
       
       <View style={styles.actionsContainer}>
@@ -228,9 +237,9 @@ export default function RecordingItem({
             >
               <FileText size={20} color={colors.purple.primary} />
               <View style={styles.optionContent}>
-                <Text style={[styles.optionTitle, { color: colors.text }]}>Regular Transcription</Text>
+                <Text style={[styles.optionTitle, { color: colors.text }]}>Multi-Language Transcription</Text>
                 <Text style={[styles.optionDescription, { color: colors.darkGray }]}>
-                  Convert speech to text without speaker separation
+                  Auto-detect language and translate to English
                 </Text>
               </View>
             </Pressable>
@@ -245,9 +254,9 @@ export default function RecordingItem({
             >
               <Users size={20} color={colors.purple.primary} />
               <View style={styles.optionContent}>
-                <Text style={[styles.optionTitle, { color: colors.text }]}>Speaker Diarization</Text>
+                <Text style={[styles.optionTitle, { color: colors.text }]}>Multi-Language Speaker Diarization</Text>
                 <Text style={[styles.optionDescription, { color: colors.darkGray }]}>
-                  Identify and separate different speakers
+                  Identify speakers with language detection and translation
                 </Text>
               </View>
             </Pressable>
@@ -315,18 +324,35 @@ const styles = StyleSheet.create({
   },
   details: {
     fontSize: 13,
-    marginBottom: 8,
+    marginBottom: 4,
+  },
+  badgesContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 4,
+  },
+  languageBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  languageBadgeText: {
+    color: "#fff",
+    fontSize: 9,
+    fontWeight: "600",
   },
   transcriptionBadge: {
     flexDirection: "row",
     alignItems: "center",
-    alignSelf: "flex-start",
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 12,
   },
   badgeIcon: {
-    marginRight: 4,
+    marginRight: 3,
   },
   transcriptionBadgeText: {
     color: "#fff",

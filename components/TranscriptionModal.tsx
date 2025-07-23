@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { StyleSheet, Text, View, Modal, Pressable, ScrollView } from "react-native";
-import { X, Copy, Users, FileText } from "lucide-react-native";
+import { X, Copy, Users, FileText, Globe, Languages } from "lucide-react-native";
 import * as Clipboard from "expo-clipboard";
 import { useTheme } from "@/hooks/use-theme";
 import { Recording } from "@/types/recording";
@@ -14,10 +14,25 @@ interface TranscriptionModalProps {
 export default function TranscriptionModal({ visible, recording, onClose }: TranscriptionModalProps) {
   const { colors } = useTheme();
   const [viewMode, setViewMode] = useState<'full' | 'speakers'>('full');
+  const [languageMode, setLanguageMode] = useState<'original' | 'translated'>('translated');
 
   const copyToClipboard = async () => {
-    if (recording?.transcription) {
-      await Clipboard.setStringAsync(recording.transcription);
+    let textToCopy = '';
+    
+    if (viewMode === 'speakers' && recording?.speakerSegments) {
+      if (languageMode === 'translated' && recording.translatedTranscription) {
+        textToCopy = recording.translatedTranscription;
+      } else {
+        textToCopy = recording.speakerSegments.map(seg => `${seg.speaker}: ${languageMode === 'translated' && seg.translated_text ? seg.translated_text : seg.text}`).join('\n');
+      }
+    } else {
+      textToCopy = languageMode === 'translated' && recording?.translatedTranscription 
+        ? recording.translatedTranscription 
+        : recording?.transcription || '';
+    }
+    
+    if (textToCopy) {
+      await Clipboard.setStringAsync(textToCopy);
     }
   };
 
@@ -63,6 +78,11 @@ export default function TranscriptionModal({ visible, recording, onClose }: Tran
             <Text style={[styles.recordingDate, { color: colors.darkGray }]}>
               {new Date(recording.createdAt).toLocaleDateString()} • {new Date(recording.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </Text>
+            {recording.detectedLanguage && (
+              <Text style={[styles.languageInfo, { color: colors.blue.primary }]}>
+                <Globe size={14} color={colors.blue.primary} /> Detected: {recording.detectedLanguage}
+              </Text>
+            )}
             {hasSpeakers && (
               <Text style={[styles.speakerCount, { color: colors.purple.primary }]}>
                 {recording.speakers?.length || 0} speakers identified
@@ -70,6 +90,7 @@ export default function TranscriptionModal({ visible, recording, onClose }: Tran
             )}
           </View>
 
+          {/* View Mode Toggle */}
           {hasSpeakers && (
             <View style={styles.viewModeContainer}>
               <Pressable
@@ -114,12 +135,64 @@ export default function TranscriptionModal({ visible, recording, onClose }: Tran
             </View>
           )}
 
+          {/* Language Mode Toggle */}
+          {(recording?.translatedTranscription || recording?.speakerSegments?.some(seg => seg.translated_text)) && (
+            <View style={styles.languageModeContainer}>
+              <Pressable
+                onPress={() => setLanguageMode('original')}
+                style={({ pressed }) => [
+                  styles.languageModeButton,
+                  { 
+                    backgroundColor: languageMode === 'original' ? colors.blue.primary : colors.lightGray,
+                    borderColor: colors.mediumGray 
+                  },
+                  pressed && styles.pressed
+                ]}
+              >
+                <Globe size={16} color={languageMode === 'original' ? '#fff' : colors.text} />
+                <Text style={[
+                  styles.languageModeText, 
+                  { color: languageMode === 'original' ? '#fff' : colors.text }
+                ]}>
+                  Original
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => setLanguageMode('translated')}
+                style={({ pressed }) => [
+                  styles.languageModeButton,
+                  { 
+                    backgroundColor: languageMode === 'translated' ? colors.blue.primary : colors.lightGray,
+                    borderColor: colors.mediumGray 
+                  },
+                  pressed && styles.pressed
+                ]}
+              >
+                <Languages size={16} color={languageMode === 'translated' ? '#fff' : colors.text} />
+                <Text style={[
+                  styles.languageModeText, 
+                  { color: languageMode === 'translated' ? '#fff' : colors.text }
+                ]}>
+                  English
+                </Text>
+              </Pressable>
+            </View>
+          )}
+
           <View style={styles.transcriptionContainer}>
             <View style={styles.transcriptionHeader}>
-              <Text style={[styles.transcriptionLabel, { color: colors.text }]}>
-                {viewMode === 'speakers' ? 'Speaker Transcription' : 'Transcription'}
-              </Text>
-              {recording.transcription && (
+              <View>
+                <Text style={[styles.transcriptionLabel, { color: colors.text }]}>
+                  {viewMode === 'speakers' ? 'Speaker Transcription' : 'Transcription'}
+                </Text>
+                {languageMode === 'translated' && recording?.detectedLanguage && (
+                  <Text style={[styles.translationNote, { color: colors.darkGray }]}>
+                    Translated from {recording.detectedLanguage}
+                  </Text>
+                )}
+              </View>
+              {(recording.transcription || recording.translatedTranscription) && (
                 <Pressable
                   onPress={copyToClipboard}
                   style={({ pressed }) => [
@@ -137,30 +210,58 @@ export default function TranscriptionModal({ visible, recording, onClose }: Tran
             <View style={[styles.transcriptionBox, { backgroundColor: colors.lightGray }]}>
               {viewMode === 'speakers' && hasSpeakers ? (
                 <View style={styles.speakerTranscription}>
-                  {recording.speakerSegments?.map((segment, index) => (
-                    <View key={index} style={styles.speakerSegment}>
-                      <View style={styles.speakerHeader}>
-                        <View style={[
-                          styles.speakerDot, 
-                          { backgroundColor: getSpeakerColor(segment.speaker) }
-                        ]} />
-                        <Text style={[styles.speakerName, { color: colors.text }]}>
-                          {segment.speaker}
+                  {recording.speakerSegments?.map((segment, index) => {
+                    const displayText = languageMode === 'translated' && segment.translated_text 
+                      ? segment.translated_text 
+                      : segment.text;
+                    
+                    return (
+                      <View key={index} style={styles.speakerSegment}>
+                        <View style={styles.speakerHeader}>
+                          <View style={[
+                            styles.speakerDot, 
+                            { backgroundColor: getSpeakerColor(segment.speaker) }
+                          ]} />
+                          <Text style={[styles.speakerName, { color: colors.text }]}>
+                            {segment.speaker}
+                          </Text>
+                          {segment.language && languageMode === 'original' && (
+                            <Text style={[styles.segmentLanguage, { color: colors.blue.primary }]}>
+                              {segment.language}
+                            </Text>
+                          )}
+                          <Text style={[styles.timestamp, { color: colors.darkGray }]}>
+                            {formatTime(segment.start_time)} - {formatTime(segment.end_time)}
+                          </Text>
+                        </View>
+                        <Text style={[styles.speakerText, { color: colors.text }]}>
+                          {displayText}
                         </Text>
-                        <Text style={[styles.timestamp, { color: colors.darkGray }]}>
-                          {formatTime(segment.start_time)} - {formatTime(segment.end_time)}
-                        </Text>
+                        {languageMode === 'translated' && segment.translated_text && segment.text !== segment.translated_text && (
+                          <Text style={[styles.originalText, { color: colors.darkGray }]}>
+                            Original: {segment.text}
+                          </Text>
+                        )}
                       </View>
-                      <Text style={[styles.speakerText, { color: colors.text }]}>
-                        {segment.text}
-                      </Text>
-                    </View>
-                  ))}
+                    );
+                  })}
                 </View>
               ) : (
-                <Text style={[styles.transcriptionText, { color: colors.text }]}>
-                  {recording.transcription || "No transcription available"}
-                </Text>
+                <View>
+                  <Text style={[styles.transcriptionText, { color: colors.text }]}>
+                    {languageMode === 'translated' && recording.translatedTranscription 
+                      ? recording.translatedTranscription 
+                      : recording.transcription || "No transcription available"}
+                  </Text>
+                  {languageMode === 'translated' && recording.translatedTranscription && recording.transcription && recording.translatedTranscription !== recording.transcription && (
+                    <View style={styles.originalSection}>
+                      <Text style={[styles.originalLabel, { color: colors.darkGray }]}>Original:</Text>
+                      <Text style={[styles.originalFullText, { color: colors.darkGray }]}>
+                        {recording.transcription}
+                      </Text>
+                    </View>
+                  )}
+                </View>
               )}
             </View>
           </View>
@@ -228,9 +329,71 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginBottom: 4,
   },
+  languageInfo: {
+    fontSize: 14,
+    fontWeight: "500",
+    marginBottom: 4,
+    flexDirection: "row",
+    alignItems: "center",
+  },
   speakerCount: {
     fontSize: 14,
     fontWeight: "600",
+  },
+  languageModeContainer: {
+    flexDirection: "row",
+    marginBottom: 20,
+    gap: 8,
+  },
+  languageModeButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  languageModeText: {
+    fontSize: 14,
+    fontWeight: "600",
+    marginLeft: 6,
+  },
+  translationNote: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  segmentLanguage: {
+    fontSize: 12,
+    fontWeight: "500",
+    marginRight: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    backgroundColor: 'rgba(37, 99, 235, 0.1)',
+  },
+  originalText: {
+    fontSize: 14,
+    lineHeight: 20,
+    marginLeft: 20,
+    marginTop: 8,
+    fontStyle: "italic",
+  },
+  originalSection: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.1)',
+  },
+  originalLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    marginBottom: 8,
+  },
+  originalFullText: {
+    fontSize: 15,
+    lineHeight: 22,
+    fontStyle: "italic",
   },
   viewModeContainer: {
     flexDirection: "row",

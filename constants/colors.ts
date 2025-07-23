@@ -27,6 +27,12 @@ export default {
       light: "#C084FC",
       dark: "#5B21B6",
     },
+    blue: {
+      primary: "#2563EB",
+      secondary: "#3B82F6",
+      light: "#60A5FA",
+      dark: "#1D4ED8",
+    },
     gradients: {
       purple: ["#7C3AED", "#A855F7", "#C084FC"] as const,
       purpleDark: ["#5B21B6", "#7C3AED"] as const,
@@ -55,6 +61,12 @@ export default {
       secondary: "#A855F7",
       light: "#C084FC",
       dark: "#5B21B6",
+    },
+    blue: {
+      primary: "#2563EB",
+      secondary: "#3B82F6",
+      light: "#60A5FA",
+      dark: "#1D4ED8",
     },
     gradients: {
       purple: ["#7C3AED", "#A855F7", "#C084FC"] as const,
