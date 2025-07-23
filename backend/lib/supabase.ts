@@ -14,7 +14,7 @@ if (!supabaseServiceKey) {
 // Use service role key for backend operations
 export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
   auth: {
-    autoRefreshToken: false,
+    autoRefreshToken: true,
     persistSession: false
   }
 });
