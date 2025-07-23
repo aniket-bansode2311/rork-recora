@@ -42,15 +42,19 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
       enabled: !!user?.id,
       retry: 2,
       staleTime: 30000,
-      onError: (error) => {
-        console.error("Failed to fetch notes from database:", error);
-        Alert.alert(
-          "Connection Error", 
-          "Failed to load notes from server. Showing offline data."
-        );
-      }
     }
   );
+
+  // Handle query errors
+  useEffect(() => {
+    if (notesQuery.error) {
+      console.error("Failed to fetch notes from database:", notesQuery.error);
+      Alert.alert(
+        "Connection Error", 
+        "Failed to load notes from server. Showing offline data."
+      );
+    }
+  }, [notesQuery.error]);
 
   // Create note mutation
   const createMutation = trpc.notes.create.useMutation({
@@ -98,7 +102,7 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
         } : n));
       });
     },
-    onError: async (error, variables, context) => {
+    onError: async (error: any, variables, context) => {
       console.warn("Failed to save note to database, saving locally:", error);
       
       Alert.alert(
@@ -165,7 +169,7 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
     onSuccess: () => {
       // Data is already optimistically updated
     },
-    onError: async (error, variables, context) => {
+    onError: async (error: any, variables, context) => {
       console.warn("Failed to update note in database, saving locally:", error);
       
       Alert.alert(
@@ -215,7 +219,7 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
       
       return { previousNotes };
     },
-    onError: async (error, variables, context) => {
+    onError: async (error: any, variables, context) => {
       console.warn("Failed to delete note from database, removing locally:", error);
       
       Alert.alert(
@@ -300,7 +304,7 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
         
         if (notesQuery.data && notesQuery.data.length > 0) {
           // Merge server data with local unsynced data
-          const serverNotes = notesQuery.data.map(note => ({ ...note, isSynced: true }));
+          const serverNotes = notesQuery.data.map((note: any) => ({ ...note, isSynced: true }));
           const unsyncedLocal = localNotes.filter(note => note.isSynced === false);
           const merged = deduplicateNotes([...unsyncedLocal, ...serverNotes]);
           setNotes(merged);

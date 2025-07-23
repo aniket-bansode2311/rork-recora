@@ -42,15 +42,19 @@ export const [RecordingsProvider, useRecordings] = createContextHook(() => {
       enabled: !!user?.id,
       retry: 2,
       staleTime: 30000,
-      onError: (error) => {
-        console.error("Failed to fetch recordings from database:", error);
-        Alert.alert(
-          "Connection Error", 
-          "Failed to load recordings from server. Showing offline data."
-        );
-      }
     }
   );
+
+  // Handle query errors
+  useEffect(() => {
+    if (recordingsQuery.error) {
+      console.error("Failed to fetch recordings from database:", recordingsQuery.error);
+      Alert.alert(
+        "Connection Error", 
+        "Failed to load recordings from server. Showing offline data."
+      );
+    }
+  }, [recordingsQuery.error]);
 
   // Create recording mutation
   const createMutation = trpc.recordings.create.useMutation({
@@ -92,7 +96,7 @@ export const [RecordingsProvider, useRecordings] = createContextHook(() => {
         } : r));
       });
     },
-    onError: async (error, variables, context) => {
+    onError: async (error: any, variables, context) => {
       console.warn("Failed to save recording to database, saving locally:", error);
       
       Alert.alert(
@@ -153,7 +157,7 @@ export const [RecordingsProvider, useRecordings] = createContextHook(() => {
     onSuccess: () => {
       // Data is already optimistically updated
     },
-    onError: async (error, variables, context) => {
+    onError: async (error: any, variables, context) => {
       console.warn("Failed to update recording in database, saving locally:", error);
       
       Alert.alert(
@@ -200,7 +204,7 @@ export const [RecordingsProvider, useRecordings] = createContextHook(() => {
       
       return { previousRecordings };
     },
-    onError: async (error, variables, context) => {
+    onError: async (error: any, variables, context) => {
       console.warn("Failed to delete recording from database, removing locally:", error);
       
       Alert.alert(
@@ -283,7 +287,7 @@ export const [RecordingsProvider, useRecordings] = createContextHook(() => {
         
         if (recordingsQuery.data && recordingsQuery.data.length > 0) {
           // Merge server data with local unsynced data
-          const serverRecordings = recordingsQuery.data.map(recording => ({ ...recording, isSynced: true }));
+          const serverRecordings = recordingsQuery.data.map((recording: any) => ({ ...recording, isSynced: true }));
           const unsyncedLocal = localRecordings.filter(recording => recording.isSynced === false);
           const merged = deduplicateRecordings([...unsyncedLocal, ...serverRecordings]);
           setRecordings(merged);
