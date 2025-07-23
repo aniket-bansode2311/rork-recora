@@ -9,6 +9,7 @@ import { useTranscription } from "@/hooks/use-transcription";
 import RecordingItem from "@/components/RecordingItem";
 import UploadButton from "@/components/UploadButton";
 import TranscriptionModal from "@/components/TranscriptionModal";
+import SyncStatusBanner from "@/components/SyncStatusBanner";
 import { Recording } from "@/types/recording";
 
 export default function HistoryScreen() {
@@ -216,6 +217,8 @@ export default function HistoryScreen() {
           },
         }} 
       />
+
+      <SyncStatusBanner />
 
       {safeRecordings.length === 0 ? (
         <View style={styles.emptyContainer}>

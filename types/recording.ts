@@ -6,4 +6,5 @@ export interface Recording {
   createdAt: Date;
   fileType: string;
   transcription?: string;
+  isSynced?: boolean; // Track sync status for offline support
 }

@@ -9,4 +9,5 @@ export interface Note {
   keyPoints?: string[];
   createdAt: Date;
   updatedAt: Date;
+  isSynced?: boolean; // Track sync status for offline support
 }
