@@ -6,19 +6,13 @@ import superjson from "superjson";
 export const trpc = createTRPCReact<AppRouter>();
 
 const getBaseUrl = () => {
-  // In Rork environment, the API is available at the same origin
-  if (typeof window !== 'undefined') {
-    // Browser - use relative URL
-    return '';
-  }
-  
-  // For development fallback
-  if (__DEV__) {
-    return "http://localhost:8081";
+  if (process.env.EXPO_PUBLIC_RORK_API_BASE_URL) {
+    return process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
   }
 
-  // Production fallback
-  return '';
+  throw new Error(
+    "No base url found, please set EXPO_PUBLIC_RORK_API_BASE_URL"
+  );
 };
 
 export const trpcClient = createTRPCClient<AppRouter>({
@@ -26,22 +20,6 @@ export const trpcClient = createTRPCClient<AppRouter>({
     httpLink({
       url: `${getBaseUrl()}/api/trpc`,
       transformer: superjson,
-      headers: () => {
-        return {
-          'Content-Type': 'application/json',
-        };
-      },
-      // Add fetch options for better error handling
-      fetch: (url, options) => {
-        return fetch(url, {
-          ...options,
-          // Add timeout
-          signal: AbortSignal.timeout(10000), // 10 second timeout
-        }).catch((error) => {
-          console.error('tRPC fetch error:', error);
-          throw error;
-        });
-      },
     }),
   ],
 });

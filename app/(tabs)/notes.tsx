@@ -7,7 +7,6 @@ import { useNotes } from "@/hooks/use-notes";
 import NoteCard from "@/components/NoteCard";
 import CreateNoteModal from "@/components/CreateNoteModal";
 import NoteEditor from "@/components/NoteEditor";
-import SyncStatusBanner from "@/components/SyncStatusBanner";
 import { Note } from "@/types/note";
 
 export default function NotesScreen() {
@@ -60,8 +59,6 @@ export default function NotesScreen() {
           ),
         }} 
       />
-
-      <SyncStatusBanner />
 
       {notes.length === 0 ? (
         <View style={styles.emptyContainer}>

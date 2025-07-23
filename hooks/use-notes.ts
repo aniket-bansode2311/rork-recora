@@ -2,15 +2,12 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import createContextHook from "@nkzw/create-context-hook";
 import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Alert } from "react-native";
 import { Note } from "@/types/note";
 import { useAuth } from "@/hooks/use-auth";
 import { trpc } from "@/lib/trpc";
 
 export const [NotesProvider, useNotes] = createContextHook(() => {
   const [notes, setNotes] = useState<Note[]>([]);
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [unsyncedCount, setUnsyncedCount] = useState(0);
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
@@ -30,40 +27,26 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
     });
   };
 
-  // Count unsynced notes
-  const countUnsyncedNotes = (notesList: Note[]): number => {
-    return notesList.filter(note => note.isSynced === false).length;
-  };
-
   // Fetch notes from database with local storage fallback
   const notesQuery = trpc.notes.list.useQuery(
     { userId: user?.id || '' },
     { 
       enabled: !!user?.id,
-      retry: 1,
-      staleTime: 30000,
-      refetchOnWindowFocus: false,
+      retry: 2,
+      staleTime: 30000, // Consider data fresh for 30 seconds
     }
   );
-
-  // Handle query errors
-  useEffect(() => {
-    if (notesQuery.error) {
-      console.error("Failed to fetch notes from database:", notesQuery.error);
-      Alert.alert(
-        "Connection Error", 
-        "Failed to load notes from server. Showing offline data."
-      );
-    }
-  }, [notesQuery.error]);
 
   // Create note mutation
   const createMutation = trpc.notes.create.useMutation({
     onMutate: async (newNote) => {
+      // Cancel outgoing refetches
       await queryClient.cancelQueries({ queryKey: [['notes', 'list'], { input: { userId: user?.id || '' } }] });
       
+      // Snapshot previous value
       const previousNotes = queryClient.getQueryData([['notes', 'list'], { input: { userId: user?.id || '' } }]);
       
+      // Optimistically update
       const optimisticNote: Note = {
         id: newNote.id,
         title: newNote.title,
@@ -75,7 +58,6 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
         keyPoints: newNote.keyPoints,
         createdAt: new Date(),
         updatedAt: new Date(),
-        isSynced: true,
       };
       
       queryClient.setQueryData([['notes', 'list'], { input: { userId: user?.id || '' } }], (old: Note[] | undefined) => {
@@ -86,9 +68,10 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
       return { previousNotes, optimisticNote };
     },
     onSuccess: (data, variables, context) => {
+      // Update with server data
       queryClient.setQueryData([['notes', 'list'], { input: { userId: user?.id || '' } }], (old: Note[] | undefined) => {
         const oldData = old || [];
-        return deduplicateNotes(oldData.map((n: Note) => n.id === variables.id ? {
+        return deduplicateNotes(oldData.map(n => n.id === variables.id ? {
           id: data.note.id,
           title: data.note.title,
           content: data.note.content,
@@ -99,22 +82,18 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
           keyPoints: data.note.keyPoints,
           createdAt: data.note.createdAt,
           updatedAt: data.note.updatedAt,
-          isSynced: true,
         } : n));
       });
     },
-    onError: async (error: any, variables, context) => {
+    onError: async (error, variables, context) => {
       console.warn("Failed to save note to database, saving locally:", error);
       
-      Alert.alert(
-        "Sync Error",
-        "Failed to save note to server. It has been saved locally and will sync when connection is restored."
-      );
-      
+      // Revert optimistic update
       if (context?.previousNotes) {
         queryClient.setQueryData([['notes', 'list'], { input: { userId: user?.id || '' } }], context.previousNotes);
       }
       
+      // Fallback to local storage
       try {
         const currentNotes = notes;
         const newNote: Note = {
@@ -128,15 +107,12 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
           keyPoints: variables.keyPoints,
           createdAt: new Date(),
           updatedAt: new Date(),
-          isSynced: false, // Mark as unsynced
         };
         const updated = deduplicateNotes([newNote, ...currentNotes]);
         await AsyncStorage.setItem(getStorageKey(), JSON.stringify(updated));
         setNotes(updated);
-        setUnsyncedCount(countUnsyncedNotes(updated));
       } catch (storageError) {
         console.error("Failed to save to local storage:", storageError);
-        Alert.alert("Error", "Failed to save note. Please try again.");
       }
     }
   });
@@ -150,7 +126,7 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
       
       queryClient.setQueryData([['notes', 'list'], { input: { userId: user?.id || '' } }], (old: Note[] | undefined) => {
         const oldData = old || [];
-        return oldData.map((note: Note) => 
+        return oldData.map(note => 
           note.id === updatedNote.id 
             ? { 
                 ...note, 
@@ -158,8 +134,7 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
                 content: updatedNote.content || note.content,
                 summary: updatedNote.summary || note.summary,
                 keyPoints: updatedNote.keyPoints || note.keyPoints,
-                updatedAt: new Date(),
-                isSynced: true,
+                updatedAt: new Date()
               }
             : note
         );
@@ -168,20 +143,17 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
       return { previousNotes };
     },
     onSuccess: () => {
-      // Data is already optimistically updated
+      // Data is already optimistically updated, no need to refetch
     },
-    onError: async (error: any, variables, context) => {
+    onError: async (error, variables, context) => {
       console.warn("Failed to update note in database, saving locally:", error);
       
-      Alert.alert(
-        "Sync Error",
-        "Failed to update note on server. Changes saved locally and will sync when connection is restored."
-      );
-      
+      // Revert optimistic update
       if (context?.previousNotes) {
         queryClient.setQueryData([['notes', 'list'], { input: { userId: user?.id || '' } }], context.previousNotes);
       }
       
+      // Fallback to local storage
       try {
         const updated = notes.map(note => 
           note.id === variables.id 
@@ -191,18 +163,15 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
                 content: variables.content || note.content,
                 summary: variables.summary || note.summary,
                 keyPoints: variables.keyPoints || note.keyPoints,
-                updatedAt: new Date(),
-                isSynced: false, // Mark as unsynced
+                updatedAt: new Date()
               }
             : note
         );
         const deduplicated = deduplicateNotes(updated);
         await AsyncStorage.setItem(getStorageKey(), JSON.stringify(deduplicated));
         setNotes(deduplicated);
-        setUnsyncedCount(countUnsyncedNotes(deduplicated));
       } catch (storageError) {
         console.error("Failed to update local storage:", storageError);
-        Alert.alert("Error", "Failed to save changes. Please try again.");
       }
     }
   });
@@ -215,86 +184,32 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
       const previousNotes = queryClient.getQueryData([['notes', 'list'], { input: { userId: user?.id || '' } }]);
       
       queryClient.setQueryData([['notes', 'list'], { input: { userId: user?.id || '' } }], (old: Note[] | undefined) => {
-        return (old || []).filter((note: Note) => note.id !== deleteVars.id);
+        return (old || []).filter(note => note.id !== deleteVars.id);
       });
       
       return { previousNotes };
     },
-    onError: async (error: any, variables, context) => {
+    onError: async (error, variables, context) => {
       console.warn("Failed to delete note from database, removing locally:", error);
       
-      Alert.alert(
-        "Sync Error",
-        "Failed to delete note from server. It has been removed locally and will sync when connection is restored."
-      );
-      
+      // Revert optimistic update
       if (context?.previousNotes) {
         queryClient.setQueryData([['notes', 'list'], { input: { userId: user?.id || '' } }], context.previousNotes);
       }
       
+      // Fallback to local storage
       try {
         const updated = notes.filter(note => note.id !== variables.id);
         const deduplicated = deduplicateNotes(updated);
         await AsyncStorage.setItem(getStorageKey(), JSON.stringify(deduplicated));
         setNotes(deduplicated);
-        setUnsyncedCount(countUnsyncedNotes(deduplicated));
       } catch (storageError) {
         console.error("Failed to update local storage:", storageError);
-        Alert.alert("Error", "Failed to delete note. Please try again.");
       }
     }
   });
 
-  // Sync unsynced notes to database
-  const syncUnsyncedNotes = async () => {
-    if (!user?.id || isSyncing) return;
-    
-    const unsyncedNotes = notes.filter(note => note.isSynced === false);
-    if (unsyncedNotes.length === 0) return;
-
-    setIsSyncing(true);
-    let syncedCount = 0;
-
-    try {
-      for (const note of unsyncedNotes) {
-        try {
-          await createMutation.mutateAsync({
-            id: note.id,
-            title: note.title,
-            content: note.content,
-            originalTranscription: note.originalTranscription,
-            recordingId: note.recordingId,
-            recordingTitle: note.recordingTitle,
-            summary: note.summary,
-            keyPoints: note.keyPoints,
-            userId: user.id,
-          });
-          
-          // Mark as synced in local storage
-          const updatedNotes = notes.map(n => 
-            n.id === note.id ? { ...n, isSynced: true } : n
-          );
-          setNotes(updatedNotes);
-          await AsyncStorage.setItem(getStorageKey(), JSON.stringify(updatedNotes));
-          syncedCount++;
-        } catch (error) {
-          console.error(`Failed to sync note ${note.id}:`, error);
-        }
-      }
-
-      if (syncedCount > 0) {
-        Alert.alert(
-          "Sync Complete",
-          `Successfully synced ${syncedCount} note${syncedCount !== 1 ? 's' : ''} to server.`
-        );
-        setUnsyncedCount(countUnsyncedNotes(notes));
-      }
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  // Load from local storage and sync
+  // Load from local storage if database fails
   useEffect(() => {
     const loadFromLocalStorage = async () => {
       if (!user?.id) return;
@@ -304,24 +219,20 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
         const localNotes = stored ? (JSON.parse(stored) as Note[]) : [];
         
         if (notesQuery.data && notesQuery.data.length > 0) {
-          // Merge server data with local unsynced data
-          const serverNotes = notesQuery.data.map((note: any) => ({ ...note, isSynced: true }));
-          const unsyncedLocal = localNotes.filter(note => note.isSynced === false);
-          const merged = deduplicateNotes([...unsyncedLocal, ...serverNotes]);
-          setNotes(merged);
-          setUnsyncedCount(countUnsyncedNotes(merged));
+          // Use database data and deduplicate
+          const deduplicated = deduplicateNotes(notesQuery.data);
+          setNotes(deduplicated);
         } else if (notesQuery.isError && localNotes.length > 0) {
+          // Only fallback to local storage if there's an error fetching from database
           const deduplicated = deduplicateNotes(localNotes);
           setNotes(deduplicated);
-          setUnsyncedCount(countUnsyncedNotes(deduplicated));
         } else if (notesQuery.isSuccess) {
+          // Database query succeeded but returned empty, clear local state
           setNotes([]);
-          setUnsyncedCount(0);
         }
       } catch (error) {
         console.error("Error loading notes:", error);
         setNotes([]);
-        setUnsyncedCount(0);
       }
     };
 
@@ -330,22 +241,10 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
     }
   }, [notesQuery.data, notesQuery.isSuccess, notesQuery.isError, user?.id]);
 
-  // Auto-sync when user is authenticated and has unsynced data
-  useEffect(() => {
-    if (user?.id && unsyncedCount > 0 && !isSyncing) {
-      const timer = setTimeout(() => {
-        syncUnsyncedNotes();
-      }, 2000); // Wait 2 seconds after load to attempt sync
-
-      return () => clearTimeout(timer);
-    }
-  }, [user?.id, unsyncedCount]);
-
   // Clear notes when user changes
   useEffect(() => {
     if (!user?.id) {
       setNotes([]);
-      setUnsyncedCount(0);
     }
   }, [user?.id]);
 
@@ -395,12 +294,12 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
 
   const clearAllNotes = async () => {
     setNotes([]);
-    setUnsyncedCount(0);
     if (user?.id) {
       await AsyncStorage.removeItem(getStorageKey());
     }
   };
 
+  // Use the query data as the primary source of truth
   const currentNotes = notesQuery.data ? deduplicateNotes(notesQuery.data) : notes;
 
   return { 
@@ -409,10 +308,7 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
     updateNote, 
     deleteNote,
     clearAllNotes,
-    syncUnsyncedNotes,
     isLoading: notesQuery.isLoading,
-    isSyncing,
-    unsyncedCount,
     error: notesQuery.error
   };
 });
