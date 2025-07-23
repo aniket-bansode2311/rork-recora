@@ -1,10 +1,12 @@
 import { z } from "zod";
-import { publicProcedure } from "../../create-context";
-import { supabaseAdmin } from "../../lib/supabase";
+import { publicProcedure } from "../../../create-context";
+import { supabaseAdmin } from "../../../../lib/supabase";
+
+const listRecordingsSchema = z.object({ userId: z.string() });
 
 export default publicProcedure
-  .input(z.object({ userId: z.string() }))
-  .query(async ({ input }) => {
+  .input(listRecordingsSchema)
+  .query(async ({ input }: { input: z.infer<typeof listRecordingsSchema> }) => {
     try {
       const { data, error } = await supabaseAdmin
         .from('recordings')

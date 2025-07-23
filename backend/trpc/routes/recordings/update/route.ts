@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { publicProcedure } from "../../create-context";
-import { supabaseAdmin } from "../../lib/supabase";
+import { publicProcedure } from "../../../create-context";
+import { supabaseAdmin } from "../../../../lib/supabase";
 
 const updateRecordingSchema = z.object({
   id: z.string(),
@@ -18,7 +18,7 @@ const updateRecordingSchema = z.object({
 
 export default publicProcedure
   .input(updateRecordingSchema)
-  .mutation(async ({ input }) => {
+  .mutation(async ({ input }: { input: z.infer<typeof updateRecordingSchema> }) => {
     try {
       const updateData: any = {
         updated_at: new Date().toISOString(),
