@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { StyleSheet, Text, View, Pressable, ActivityIndicator, TextInput, Alert } from "react-native";
-import { Trash2, Play, Pause, FileText, Edit3, Check, X } from "lucide-react-native";
+import { Trash2, Play, Pause, FileText, Edit3, Check, X, Users } from "lucide-react-native";
 import { useTheme } from "@/hooks/use-theme";
 import { Recording } from "@/types/recording";
 
@@ -10,7 +10,9 @@ interface RecordingItemProps {
   onDelete: (id: string) => void;
   onRename?: (id: string, newTitle: string) => void;
   onTranscribe?: (recording: Recording) => void;
+  onTranscribeWithSpeakers?: (recording: Recording) => void;
   isTranscribing?: boolean;
+  isDiarizing?: boolean;
   isPlaying?: boolean;
   isPaused?: boolean;
 }
@@ -21,13 +23,16 @@ export default function RecordingItem({
   onDelete,
   onRename,
   onTranscribe,
+  onTranscribeWithSpeakers,
   isTranscribing = false,
+  isDiarizing = false,
   isPlaying = false,
   isPaused = false
 }: RecordingItemProps) {
   const { colors } = useTheme();
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(recording.title);
+  const [showTranscribeOptions, setShowTranscribeOptions] = useState(false);
   
   const formattedDate = new Date(recording.createdAt).toLocaleDateString();
   const formattedTime = new Date(recording.createdAt).toLocaleTimeString([], { 
@@ -65,6 +70,41 @@ export default function RecordingItem({
   const handleCancelEdit = () => {
     setEditTitle(recording.title);
     setIsEditing(false);
+  };
+
+  const handleTranscribePress = () => {
+    if (recording.transcription || recording.speakerSegments) {
+      // Already transcribed, just show the transcription
+      if (onTranscribe) {
+        onTranscribe(recording);
+      }
+    } else {
+      // Show transcription options
+      setShowTranscribeOptions(true);
+    }
+  };
+
+  const handleRegularTranscribe = () => {
+    setShowTranscribeOptions(false);
+    if (onTranscribe) {
+      onTranscribe(recording);
+    }
+  };
+
+  const handleSpeakerTranscribe = () => {
+    setShowTranscribeOptions(false);
+    if (onTranscribeWithSpeakers) {
+      onTranscribeWithSpeakers(recording);
+    }
+  };
+
+  const getTranscriptionStatus = () => {
+    if (recording.speakerSegments && recording.speakerSegments.length > 0) {
+      return `${recording.speakers?.length || 0} speakers`;
+    } else if (recording.transcription) {
+      return "Transcribed";
+    }
+    return null;
   };
 
   return (
@@ -113,9 +153,15 @@ export default function RecordingItem({
         <Text style={[styles.details, { color: colors.darkGray }]}>
           {formattedDate} • {formattedTime} • {formatDuration(recording.duration)}
         </Text>
-        {recording.transcription && (
-          <View style={[styles.transcriptionBadge, { backgroundColor: colors.purple.light }]}>
-            <Text style={styles.transcriptionBadgeText}>Transcribed</Text>
+        
+        {getTranscriptionStatus() && (
+          <View style={[styles.transcriptionBadge, { 
+            backgroundColor: recording.speakerSegments ? colors.purple.primary : colors.purple.light 
+          }]}>
+            {recording.speakerSegments && (
+              <Users size={12} color="#fff" style={styles.badgeIcon} />
+            )}
+            <Text style={styles.transcriptionBadgeText}>{getTranscriptionStatus()}</Text>
           </View>
         )}
       </View>
@@ -130,22 +176,22 @@ export default function RecordingItem({
           </Pressable>
         )}
         
-        {onTranscribe && (
+        {(onTranscribe || onTranscribeWithSpeakers) && (
           <Pressable 
-            onPress={() => onTranscribe(recording)}
-            disabled={isTranscribing}
+            onPress={handleTranscribePress}
+            disabled={isTranscribing || isDiarizing}
             style={({ pressed }) => [
               styles.actionButton, 
               pressed && styles.pressed,
-              isTranscribing && styles.disabled
+              (isTranscribing || isDiarizing) && styles.disabled
             ]}
           >
-            {isTranscribing ? (
+            {isTranscribing || isDiarizing ? (
               <ActivityIndicator size={20} color={colors.purple.primary} />
             ) : (
               <FileText 
                 size={20} 
-                color={recording.transcription ? colors.success : colors.purple.primary} 
+                color={recording.transcription || recording.speakerSegments ? colors.success : colors.purple.primary} 
               />
             )}
           </Pressable>
@@ -165,6 +211,60 @@ export default function RecordingItem({
           <Trash2 size={20} color={colors.danger} />
         </Pressable>
       </View>
+
+      {/* Transcription Options Modal */}
+      {showTranscribeOptions && (
+        <View style={[styles.optionsOverlay, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
+          <View style={[styles.optionsModal, { backgroundColor: colors.background }]}>
+            <Text style={[styles.optionsTitle, { color: colors.text }]}>Choose Transcription Type</Text>
+            
+            <Pressable
+              onPress={handleRegularTranscribe}
+              style={({ pressed }) => [
+                styles.optionButton,
+                { backgroundColor: colors.lightGray },
+                pressed && styles.pressed
+              ]}
+            >
+              <FileText size={20} color={colors.purple.primary} />
+              <View style={styles.optionContent}>
+                <Text style={[styles.optionTitle, { color: colors.text }]}>Regular Transcription</Text>
+                <Text style={[styles.optionDescription, { color: colors.darkGray }]}>
+                  Convert speech to text without speaker separation
+                </Text>
+              </View>
+            </Pressable>
+
+            <Pressable
+              onPress={handleSpeakerTranscribe}
+              style={({ pressed }) => [
+                styles.optionButton,
+                { backgroundColor: colors.lightGray },
+                pressed && styles.pressed
+              ]}
+            >
+              <Users size={20} color={colors.purple.primary} />
+              <View style={styles.optionContent}>
+                <Text style={[styles.optionTitle, { color: colors.text }]}>Speaker Diarization</Text>
+                <Text style={[styles.optionDescription, { color: colors.darkGray }]}>
+                  Identify and separate different speakers
+                </Text>
+              </View>
+            </Pressable>
+
+            <Pressable
+              onPress={() => setShowTranscribeOptions(false)}
+              style={({ pressed }) => [
+                styles.cancelButton,
+                { backgroundColor: colors.danger },
+                pressed && styles.pressed
+              ]}
+            >
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -218,10 +318,15 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   transcriptionBadge: {
+    flexDirection: "row",
+    alignItems: "center",
     alignSelf: "flex-start",
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 12,
+  },
+  badgeIcon: {
+    marginRight: 4,
   },
   transcriptionBadgeText: {
     color: "#fff",
@@ -243,5 +348,61 @@ const styles = StyleSheet.create({
   },
   disabled: {
     opacity: 0.5,
+  },
+  optionsOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 1000,
+  },
+  optionsModal: {
+    padding: 20,
+    borderRadius: 16,
+    width: "90%",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  optionsTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    marginBottom: 16,
+    textAlign: "center",
+  },
+  optionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  optionContent: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  optionTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    marginBottom: 4,
+  },
+  optionDescription: {
+    fontSize: 14,
+  },
+  cancelButton: {
+    padding: 12,
+    borderRadius: 8,
+    alignItems: "center",
+    marginTop: 8,
+  },
+  cancelButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
   },
 });

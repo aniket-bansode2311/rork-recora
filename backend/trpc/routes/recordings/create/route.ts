@@ -9,6 +9,13 @@ const createRecordingSchema = z.object({
   title: z.string(),
   fileType: z.string(),
   transcription: z.string().optional(),
+  speakerSegments: z.array(z.object({
+    speaker: z.string(),
+    text: z.string(),
+    start_time: z.number(),
+    end_time: z.number(),
+  })).optional(),
+  speakers: z.array(z.string()).optional(),
   userId: z.string(),
 });
 
@@ -26,6 +33,8 @@ export default publicProcedure
           title: input.title,
           file_type: input.fileType,
           transcription: input.transcription,
+          speaker_segments: input.speakerSegments ? JSON.stringify(input.speakerSegments) : null,
+          speakers: input.speakers ? JSON.stringify(input.speakers) : null,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
@@ -46,6 +55,8 @@ export default publicProcedure
           title: data.title,
           fileType: data.file_type,
           transcription: data.transcription,
+          speakerSegments: data.speaker_segments ? JSON.parse(data.speaker_segments) : undefined,
+          speakers: data.speakers ? JSON.parse(data.speakers) : undefined,
           createdAt: new Date(data.created_at),
         }
       };

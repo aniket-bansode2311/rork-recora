@@ -55,6 +55,8 @@ export const [RecordingsProvider, useRecordings] = createContextHook(() => {
         createdAt: new Date(),
         fileType: newRecording.fileType,
         transcription: newRecording.transcription,
+        speakerSegments: newRecording.speakerSegments,
+        speakers: newRecording.speakers,
       };
       
       queryClient.setQueryData([['recordings', 'list'], { input: { userId: user?.id || '' } }], (old: Recording[] | undefined) => {
@@ -76,6 +78,8 @@ export const [RecordingsProvider, useRecordings] = createContextHook(() => {
           createdAt: data.recording.createdAt,
           fileType: data.recording.fileType,
           transcription: data.recording.transcription,
+          speakerSegments: data.recording.speakerSegments,
+          speakers: data.recording.speakers,
         } : r));
       });
     },
@@ -98,6 +102,8 @@ export const [RecordingsProvider, useRecordings] = createContextHook(() => {
           createdAt: new Date(),
           fileType: variables.fileType,
           transcription: variables.transcription,
+          speakerSegments: variables.speakerSegments,
+          speakers: variables.speakers,
         };
         const updated = deduplicateRecordings([newRecording, ...currentRecordings]);
         await AsyncStorage.setItem(getStorageKey(), JSON.stringify(updated));
@@ -119,7 +125,13 @@ export const [RecordingsProvider, useRecordings] = createContextHook(() => {
         const oldData = old || [];
         return oldData.map(recording => 
           recording.id === updatedRecording.id 
-            ? { ...recording, transcription: updatedRecording.transcription, title: updatedRecording.title || recording.title }
+            ? { 
+                ...recording, 
+                transcription: updatedRecording.transcription || recording.transcription, 
+                title: updatedRecording.title || recording.title,
+                speakerSegments: updatedRecording.speakerSegments || recording.speakerSegments,
+                speakers: updatedRecording.speakers || recording.speakers,
+              }
             : recording
         );
       });
@@ -141,7 +153,13 @@ export const [RecordingsProvider, useRecordings] = createContextHook(() => {
       try {
         const updated = recordings.map(recording => 
           recording.id === variables.id 
-            ? { ...recording, transcription: variables.transcription, title: variables.title || recording.title }
+            ? { 
+                ...recording, 
+                transcription: variables.transcription || recording.transcription, 
+                title: variables.title || recording.title,
+                speakerSegments: variables.speakerSegments || recording.speakerSegments,
+                speakers: variables.speakers || recording.speakers,
+              }
             : recording
         );
         const deduplicated = deduplicateRecordings(updated);
@@ -237,6 +255,8 @@ export const [RecordingsProvider, useRecordings] = createContextHook(() => {
       title: recording.title,
       fileType: recording.fileType,
       transcription: recording.transcription,
+      speakerSegments: recording.speakerSegments,
+      speakers: recording.speakers,
       userId: user.id,
     });
   };
@@ -260,6 +280,8 @@ export const [RecordingsProvider, useRecordings] = createContextHook(() => {
       id: updatedRecording.id,
       transcription: updatedRecording.transcription,
       title: updatedRecording.title,
+      speakerSegments: updatedRecording.speakerSegments,
+      speakers: updatedRecording.speakers,
       userId: user.id,
     });
   };

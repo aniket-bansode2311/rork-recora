@@ -7,6 +7,8 @@ CREATE TABLE IF NOT EXISTS recordings (
   title TEXT NOT NULL,
   file_type TEXT NOT NULL,
   transcription TEXT,
+  speaker_segments JSONB,
+  speakers JSONB,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

@@ -14,7 +14,7 @@ import { Recording } from "@/types/recording";
 export default function HistoryScreen() {
   const { recordings, deleteRecording, addRecording, updateRecording, isLoading } = useRecordings();
   const { colors } = useTheme();
-  const { transcribeAudio, isTranscribing } = useTranscription();
+  const { transcribeAudio, transcribeWithSpeakers, isTranscribing, isDiarizing } = useTranscription();
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [isPaused, setIsPaused] = useState(false);
@@ -131,7 +131,7 @@ export default function HistoryScreen() {
   };
 
   const handleTranscribe = async (recording: Recording) => {
-    if (recording.transcription) {
+    if (recording.transcription || recording.speakerSegments) {
       // If already transcribed, show the modal
       setSelectedRecording(recording);
       setShowTranscriptionModal(true);
@@ -142,6 +142,29 @@ export default function HistoryScreen() {
     const transcription = await transcribeAudio(recording);
     if (transcription) {
       const updatedRecording = { ...recording, transcription };
+      updateRecording(updatedRecording);
+      setSelectedRecording(updatedRecording);
+      setShowTranscriptionModal(true);
+    }
+  };
+
+  const handleTranscribeWithSpeakers = async (recording: Recording) => {
+    if (recording.speakerSegments) {
+      // If already transcribed with speakers, show the modal
+      setSelectedRecording(recording);
+      setShowTranscriptionModal(true);
+      return;
+    }
+
+    // Transcribe with speaker diarization
+    const result = await transcribeWithSpeakers(recording);
+    if (result) {
+      const updatedRecording = { 
+        ...recording, 
+        transcription: result.full_text,
+        speakerSegments: result.segments,
+        speakers: result.speakers
+      };
       updateRecording(updatedRecording);
       setSelectedRecording(updatedRecording);
       setShowTranscriptionModal(true);
@@ -243,7 +266,9 @@ export default function HistoryScreen() {
                 onDelete={handleDelete}
                 onRename={handleRename}
                 onTranscribe={handleTranscribe}
+                onTranscribeWithSpeakers={handleTranscribeWithSpeakers}
                 isTranscribing={isTranscribing === item.id}
+                isDiarizing={isDiarizing === item.id}
                 isPlaying={playingId === item.id && !isPaused}
                 isPaused={playingId === item.id && isPaused}
               />

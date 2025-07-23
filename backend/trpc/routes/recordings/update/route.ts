@@ -6,6 +6,13 @@ const updateRecordingSchema = z.object({
   id: z.string(),
   transcription: z.string().optional(),
   title: z.string().optional(),
+  speakerSegments: z.array(z.object({
+    speaker: z.string(),
+    text: z.string(),
+    start_time: z.number(),
+    end_time: z.number(),
+  })).optional(),
+  speakers: z.array(z.string()).optional(),
   userId: z.string(),
 });
 
@@ -22,6 +29,12 @@ export default publicProcedure
       }
       if (input.title !== undefined) {
         updateData.title = input.title;
+      }
+      if (input.speakerSegments !== undefined) {
+        updateData.speaker_segments = JSON.stringify(input.speakerSegments);
+      }
+      if (input.speakers !== undefined) {
+        updateData.speakers = JSON.stringify(input.speakers);
       }
 
       const { data, error } = await supabaseAdmin
@@ -43,6 +56,8 @@ export default publicProcedure
           id: data.id,
           transcription: data.transcription,
           title: data.title,
+          speakerSegments: data.speaker_segments ? JSON.parse(data.speaker_segments) : undefined,
+          speakers: data.speakers ? JSON.parse(data.speakers) : undefined,
           userId: data.user_id,
         }
       };

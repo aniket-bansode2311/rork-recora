@@ -24,6 +24,8 @@ export default publicProcedure
         title: record.title,
         fileType: record.file_type,
         transcription: record.transcription,
+        speakerSegments: record.speaker_segments ? JSON.parse(record.speaker_segments) : undefined,
+        speakers: record.speakers ? JSON.parse(record.speakers) : undefined,
         createdAt: new Date(record.created_at),
       }));
     } catch (error) {
