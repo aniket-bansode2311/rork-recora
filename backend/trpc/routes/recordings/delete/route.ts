@@ -1,13 +1,13 @@
 import { z } from "zod";
 import { publicProcedure } from "../../create-context";
-import { supabaseAdmin } from "../../../lib/supabase";
+import { supabaseAdmin } from "../../lib/supabase";
 
 export default publicProcedure
   .input(z.object({ 
     id: z.string(),
     userId: z.string() 
   }))
-  .mutation(async ({ input }: { input: { id: string; userId: string } }) => {
+  .mutation(async ({ input }) => {
     try {
       const { error } = await supabaseAdmin
         .from('recordings')

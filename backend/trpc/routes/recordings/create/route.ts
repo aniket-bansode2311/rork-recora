@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { publicProcedure } from "../../create-context";
-import { supabaseAdmin } from "../../../lib/supabase";
+import { supabaseAdmin } from "../../lib/supabase";
 
 const createRecordingSchema = z.object({
   id: z.string(),
@@ -21,7 +21,7 @@ const createRecordingSchema = z.object({
 
 export default publicProcedure
   .input(createRecordingSchema)
-  .mutation(async ({ input }: { input: z.infer<typeof createRecordingSchema> }) => {
+  .mutation(async ({ input }) => {
     try {
       const { data, error } = await supabaseAdmin
         .from('recordings')
