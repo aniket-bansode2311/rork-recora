@@ -15,6 +15,11 @@ if (!supabaseServiceKey) {
 export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
   auth: {
     autoRefreshToken: true,
-    persistSession: false
-  }
+    persistSession: true
+  },
+  db: {
+    ssl: {
+      // Required for all platforms
+      rejectUnauthorized: false
+    }
 });
