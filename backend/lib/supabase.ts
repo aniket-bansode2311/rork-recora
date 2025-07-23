@@ -22,5 +22,4 @@ export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
       // Required for all platforms
       rejectUnauthorized: false
     }
-  }
 });
