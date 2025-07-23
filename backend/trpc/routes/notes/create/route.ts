@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { publicProcedure } from "../../../create-context";
+import { protectedProcedure } from "../../../create-context";
 import { supabaseAdmin } from "../../../lib/supabase";
 
 const createNoteSchema = z.object({
@@ -11,18 +11,17 @@ const createNoteSchema = z.object({
   recordingTitle: z.string().optional(),
   summary: z.string().optional(),
   keyPoints: z.array(z.string()).optional(),
-  userId: z.string(),
 });
 
-export default publicProcedure
+export default protectedProcedure
   .input(createNoteSchema)
-  .mutation(async ({ input }) => {
+  .mutation(async ({ input, ctx }) => {
     try {
       const { data, error } = await supabaseAdmin
         .from('notes')
         .insert({
           id: input.id,
-          user_id: input.userId,
+          user_id: ctx.userId,
           title: input.title,
           content: input.content,
           original_transcription: input.originalTranscription,

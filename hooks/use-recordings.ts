@@ -37,7 +37,7 @@ export const [RecordingsProvider, useRecordings] = createContextHook(() => {
 
   // Fetch recordings from database with local storage fallback
   const recordingsQuery = trpc.recordings.list.useQuery(
-    { userId: user?.id || '' },
+    undefined,
     { 
       enabled: !!user?.id,
       retry: 2,
@@ -59,9 +59,9 @@ export const [RecordingsProvider, useRecordings] = createContextHook(() => {
   // Create recording mutation
   const createMutation = trpc.recordings.create.useMutation({
     onMutate: async (newRecording) => {
-      await queryClient.cancelQueries({ queryKey: [['recordings', 'list'], { input: { userId: user?.id || '' } }] });
+      await queryClient.cancelQueries({ queryKey: [['recordings', 'list']] });
       
-      const previousRecordings = queryClient.getQueryData([['recordings', 'list'], { input: { userId: user?.id || '' } }]);
+      const previousRecordings = queryClient.getQueryData([['recordings', 'list']]);
       
       const optimisticRecording: Recording = {
         id: newRecording.id,
@@ -74,7 +74,7 @@ export const [RecordingsProvider, useRecordings] = createContextHook(() => {
         isSynced: true,
       };
       
-      queryClient.setQueryData([['recordings', 'list'], { input: { userId: user?.id || '' } }], (old: Recording[] | undefined) => {
+      queryClient.setQueryData([['recordings', 'list']], (old: Recording[] | undefined) => {
         const oldData = old || [];
         return deduplicateRecordings([optimisticRecording, ...oldData]);
       });
@@ -82,9 +82,9 @@ export const [RecordingsProvider, useRecordings] = createContextHook(() => {
       return { previousRecordings, optimisticRecording };
     },
     onSuccess: (data, variables, context) => {
-      queryClient.setQueryData([['recordings', 'list'], { input: { userId: user?.id || '' } }], (old: Recording[] | undefined) => {
+      queryClient.setQueryData([['recordings', 'list']], (old: Recording[] | undefined) => {
         const oldData = old || [];
-        return deduplicateRecordings(oldData.map(r => r.id === variables.id ? {
+        return deduplicateRecordings(oldData.map((r: Recording) => r.id === variables.id ? {
           id: data.recording.id,
           uri: data.recording.uri,
           duration: data.recording.duration,
@@ -105,7 +105,7 @@ export const [RecordingsProvider, useRecordings] = createContextHook(() => {
       );
       
       if (context?.previousRecordings) {
-        queryClient.setQueryData([['recordings', 'list'], { input: { userId: user?.id || '' } }], context.previousRecordings);
+        queryClient.setQueryData([['recordings', 'list']], context.previousRecordings);
       }
       
       try {
@@ -134,13 +134,13 @@ export const [RecordingsProvider, useRecordings] = createContextHook(() => {
   // Update recording mutation
   const updateMutation = trpc.recordings.update.useMutation({
     onMutate: async (updatedRecording) => {
-      await queryClient.cancelQueries({ queryKey: [['recordings', 'list'], { input: { userId: user?.id || '' } }] });
+      await queryClient.cancelQueries({ queryKey: [['recordings', 'list']] });
       
-      const previousRecordings = queryClient.getQueryData([['recordings', 'list'], { input: { userId: user?.id || '' } }]);
+      const previousRecordings = queryClient.getQueryData([['recordings', 'list']]);
       
-      queryClient.setQueryData([['recordings', 'list'], { input: { userId: user?.id || '' } }], (old: Recording[] | undefined) => {
+      queryClient.setQueryData([['recordings', 'list']], (old: Recording[] | undefined) => {
         const oldData = old || [];
-        return oldData.map(recording => 
+        return oldData.map((recording: Recording) => 
           recording.id === updatedRecording.id 
             ? { 
                 ...recording, 
@@ -166,11 +166,11 @@ export const [RecordingsProvider, useRecordings] = createContextHook(() => {
       );
       
       if (context?.previousRecordings) {
-        queryClient.setQueryData([['recordings', 'list'], { input: { userId: user?.id || '' } }], context.previousRecordings);
+        queryClient.setQueryData([['recordings', 'list']], context.previousRecordings);
       }
       
       try {
-        const updated = recordings.map(recording => 
+        const updated = recordings.map((recording: Recording) => 
           recording.id === variables.id 
             ? { 
                 ...recording, 
@@ -194,12 +194,12 @@ export const [RecordingsProvider, useRecordings] = createContextHook(() => {
   // Delete recording mutation
   const deleteMutation = trpc.recordings.delete.useMutation({
     onMutate: async (deleteVars) => {
-      await queryClient.cancelQueries({ queryKey: [['recordings', 'list'], { input: { userId: user?.id || '' } }] });
+      await queryClient.cancelQueries({ queryKey: [['recordings', 'list']] });
       
-      const previousRecordings = queryClient.getQueryData([['recordings', 'list'], { input: { userId: user?.id || '' } }]);
+      const previousRecordings = queryClient.getQueryData([['recordings', 'list']]);
       
-      queryClient.setQueryData([['recordings', 'list'], { input: { userId: user?.id || '' } }], (old: Recording[] | undefined) => {
-        return (old || []).filter(recording => recording.id !== deleteVars.id);
+      queryClient.setQueryData([['recordings', 'list']], (old: Recording[] | undefined) => {
+        return (old || []).filter((recording: Recording) => recording.id !== deleteVars.id);
       });
       
       return { previousRecordings };
@@ -213,11 +213,11 @@ export const [RecordingsProvider, useRecordings] = createContextHook(() => {
       );
       
       if (context?.previousRecordings) {
-        queryClient.setQueryData([['recordings', 'list'], { input: { userId: user?.id || '' } }], context.previousRecordings);
+        queryClient.setQueryData([['recordings', 'list']], context.previousRecordings);
       }
       
       try {
-        const updated = recordings.filter(recording => recording.id !== variables.id);
+        const updated = recordings.filter((recording: Recording) => recording.id !== variables.id);
         const deduplicated = deduplicateRecordings(updated);
         await AsyncStorage.setItem(getStorageKey(), JSON.stringify(deduplicated));
         setRecordings(deduplicated);
@@ -233,7 +233,7 @@ export const [RecordingsProvider, useRecordings] = createContextHook(() => {
   const syncUnsyncedRecordings = async () => {
     if (!user?.id || isSyncing) return;
     
-    const unsyncedRecordings = recordings.filter(recording => recording.isSynced === false);
+    const unsyncedRecordings = recordings.filter((recording: Recording) => recording.isSynced === false);
     if (unsyncedRecordings.length === 0) return;
 
     setIsSyncing(true);
@@ -249,11 +249,10 @@ export const [RecordingsProvider, useRecordings] = createContextHook(() => {
             title: recording.title,
             fileType: recording.fileType,
             transcription: recording.transcription,
-            userId: user.id,
           });
           
           // Mark as synced in local storage
-          const updatedRecordings = recordings.map(r => 
+          const updatedRecordings = recordings.map((r: Recording) => 
             r.id === recording.id ? { ...r, isSynced: true } : r
           );
           setRecordings(updatedRecordings);
@@ -288,7 +287,7 @@ export const [RecordingsProvider, useRecordings] = createContextHook(() => {
         if (recordingsQuery.data && recordingsQuery.data.length > 0) {
           // Merge server data with local unsynced data
           const serverRecordings = recordingsQuery.data.map((recording: any) => ({ ...recording, isSynced: true }));
-          const unsyncedLocal = localRecordings.filter(recording => recording.isSynced === false);
+          const unsyncedLocal = localRecordings.filter((recording: Recording) => recording.isSynced === false);
           const merged = deduplicateRecordings([...unsyncedLocal, ...serverRecordings]);
           setRecordings(merged);
           setUnsyncedCount(countUnsyncedRecordings(merged));
@@ -344,7 +343,6 @@ export const [RecordingsProvider, useRecordings] = createContextHook(() => {
       title: recording.title,
       fileType: recording.fileType,
       transcription: recording.transcription,
-      userId: user.id,
     });
   };
 
@@ -354,7 +352,7 @@ export const [RecordingsProvider, useRecordings] = createContextHook(() => {
       return;
     }
     
-    deleteMutation.mutate({ id, userId: user.id });
+    deleteMutation.mutate({ id });
   };
 
   const updateRecording = (updatedRecording: Recording) => {
@@ -367,7 +365,6 @@ export const [RecordingsProvider, useRecordings] = createContextHook(() => {
       id: updatedRecording.id,
       transcription: updatedRecording.transcription,
       title: updatedRecording.title,
-      userId: user.id,
     });
   };
 

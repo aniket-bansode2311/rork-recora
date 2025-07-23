@@ -1,19 +1,18 @@
 import { z } from "zod";
-import { publicProcedure } from "../../../create-context";
+import { protectedProcedure } from "../../../create-context";
 import { supabaseAdmin } from "../../../lib/supabase";
 
-export default publicProcedure
+export default protectedProcedure
   .input(z.object({ 
     id: z.string(),
-    userId: z.string() 
   }))
-  .mutation(async ({ input }) => {
+  .mutation(async ({ input, ctx }) => {
     try {
       const { error } = await supabaseAdmin
         .from('notes')
         .delete()
         .eq('id', input.id)
-        .eq('user_id', input.userId);
+        .eq('user_id', ctx.userId);
 
       if (error) {
         console.error('Supabase error deleting note:', error);

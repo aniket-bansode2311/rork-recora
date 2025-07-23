@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { publicProcedure } from "../../../create-context";
+import { protectedProcedure } from "../../../create-context";
 import { supabaseAdmin } from "../../../lib/supabase";
 
 const createRecordingSchema = z.object({
@@ -9,18 +9,17 @@ const createRecordingSchema = z.object({
   title: z.string(),
   fileType: z.string(),
   transcription: z.string().optional(),
-  userId: z.string(),
 });
 
-export default publicProcedure
+export default protectedProcedure
   .input(createRecordingSchema)
-  .mutation(async ({ input }) => {
+  .mutation(async ({ input, ctx }) => {
     try {
       const { data, error } = await supabaseAdmin
         .from('recordings')
         .insert({
           id: input.id,
-          user_id: input.userId,
+          user_id: ctx.userId,
           uri: input.uri,
           duration: input.duration,
           title: input.title,
