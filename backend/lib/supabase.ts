@@ -16,10 +16,5 @@ export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
   auth: {
     autoRefreshToken: true,
     persistSession: true
-  },
-  db: {
-    ssl: {
-      // Required for all platforms
-      rejectUnauthorized: false
-    }
+  }
 });
