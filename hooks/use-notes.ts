@@ -37,7 +37,7 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
 
   // Fetch notes from database with local storage fallback
   const notesQuery = trpc.notes.list.useQuery(
-    undefined,
+    { userId: user?.id || '' },
     { 
       enabled: !!user?.id,
       retry: 2,
@@ -59,9 +59,9 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
   // Create note mutation
   const createMutation = trpc.notes.create.useMutation({
     onMutate: async (newNote) => {
-      await queryClient.cancelQueries({ queryKey: [['notes', 'list']] });
+      await queryClient.cancelQueries({ queryKey: [['notes', 'list'], { input: { userId: user?.id || '' } }] });
       
-      const previousNotes = queryClient.getQueryData([['notes', 'list']]);
+      const previousNotes = queryClient.getQueryData([['notes', 'list'], { input: { userId: user?.id || '' } }]);
       
       const optimisticNote: Note = {
         id: newNote.id,
@@ -77,7 +77,7 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
         isSynced: true,
       };
       
-      queryClient.setQueryData([['notes', 'list']], (old: Note[] | undefined) => {
+      queryClient.setQueryData([['notes', 'list'], { input: { userId: user?.id || '' } }], (old: Note[] | undefined) => {
         const oldData = old || [];
         return deduplicateNotes([optimisticNote, ...oldData]);
       });
@@ -85,9 +85,9 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
       return { previousNotes, optimisticNote };
     },
     onSuccess: (data, variables, context) => {
-      queryClient.setQueryData([['notes', 'list']], (old: Note[] | undefined) => {
+      queryClient.setQueryData([['notes', 'list'], { input: { userId: user?.id || '' } }], (old: Note[] | undefined) => {
         const oldData = old || [];
-        return deduplicateNotes(oldData.map((n: Note) => n.id === variables.id ? {
+        return deduplicateNotes(oldData.map(n => n.id === variables.id ? {
           id: data.note.id,
           title: data.note.title,
           content: data.note.content,
@@ -111,7 +111,7 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
       );
       
       if (context?.previousNotes) {
-        queryClient.setQueryData([['notes', 'list']], context.previousNotes);
+        queryClient.setQueryData([['notes', 'list'], { input: { userId: user?.id || '' } }], context.previousNotes);
       }
       
       try {
@@ -143,13 +143,13 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
   // Update note mutation
   const updateMutation = trpc.notes.update.useMutation({
     onMutate: async (updatedNote) => {
-      await queryClient.cancelQueries({ queryKey: [['notes', 'list']] });
+      await queryClient.cancelQueries({ queryKey: [['notes', 'list'], { input: { userId: user?.id || '' } }] });
       
-      const previousNotes = queryClient.getQueryData([['notes', 'list']]);
+      const previousNotes = queryClient.getQueryData([['notes', 'list'], { input: { userId: user?.id || '' } }]);
       
-      queryClient.setQueryData([['notes', 'list']], (old: Note[] | undefined) => {
+      queryClient.setQueryData([['notes', 'list'], { input: { userId: user?.id || '' } }], (old: Note[] | undefined) => {
         const oldData = old || [];
-        return oldData.map((note: Note) => 
+        return oldData.map(note => 
           note.id === updatedNote.id 
             ? { 
                 ...note, 
@@ -178,11 +178,11 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
       );
       
       if (context?.previousNotes) {
-        queryClient.setQueryData([['notes', 'list']], context.previousNotes);
+        queryClient.setQueryData([['notes', 'list'], { input: { userId: user?.id || '' } }], context.previousNotes);
       }
       
       try {
-        const updated = notes.map((note: Note) => 
+        const updated = notes.map(note => 
           note.id === variables.id 
             ? { 
                 ...note, 
@@ -209,12 +209,12 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
   // Delete note mutation
   const deleteMutation = trpc.notes.delete.useMutation({
     onMutate: async (deleteVars) => {
-      await queryClient.cancelQueries({ queryKey: [['notes', 'list']] });
+      await queryClient.cancelQueries({ queryKey: [['notes', 'list'], { input: { userId: user?.id || '' } }] });
       
-      const previousNotes = queryClient.getQueryData([['notes', 'list']]);
+      const previousNotes = queryClient.getQueryData([['notes', 'list'], { input: { userId: user?.id || '' } }]);
       
-      queryClient.setQueryData([['notes', 'list']], (old: Note[] | undefined) => {
-        return (old || []).filter((note: Note) => note.id !== deleteVars.id);
+      queryClient.setQueryData([['notes', 'list'], { input: { userId: user?.id || '' } }], (old: Note[] | undefined) => {
+        return (old || []).filter(note => note.id !== deleteVars.id);
       });
       
       return { previousNotes };
@@ -228,11 +228,11 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
       );
       
       if (context?.previousNotes) {
-        queryClient.setQueryData([['notes', 'list']], context.previousNotes);
+        queryClient.setQueryData([['notes', 'list'], { input: { userId: user?.id || '' } }], context.previousNotes);
       }
       
       try {
-        const updated = notes.filter((note: Note) => note.id !== variables.id);
+        const updated = notes.filter(note => note.id !== variables.id);
         const deduplicated = deduplicateNotes(updated);
         await AsyncStorage.setItem(getStorageKey(), JSON.stringify(deduplicated));
         setNotes(deduplicated);
@@ -248,7 +248,7 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
   const syncUnsyncedNotes = async () => {
     if (!user?.id || isSyncing) return;
     
-    const unsyncedNotes = notes.filter((note: Note) => note.isSynced === false);
+    const unsyncedNotes = notes.filter(note => note.isSynced === false);
     if (unsyncedNotes.length === 0) return;
 
     setIsSyncing(true);
@@ -266,10 +266,11 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
             recordingTitle: note.recordingTitle,
             summary: note.summary,
             keyPoints: note.keyPoints,
+            userId: user.id,
           });
           
           // Mark as synced in local storage
-          const updatedNotes = notes.map((n: Note) => 
+          const updatedNotes = notes.map(n => 
             n.id === note.id ? { ...n, isSynced: true } : n
           );
           setNotes(updatedNotes);
@@ -304,7 +305,7 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
         if (notesQuery.data && notesQuery.data.length > 0) {
           // Merge server data with local unsynced data
           const serverNotes = notesQuery.data.map((note: any) => ({ ...note, isSynced: true }));
-          const unsyncedLocal = localNotes.filter((note: Note) => note.isSynced === false);
+          const unsyncedLocal = localNotes.filter(note => note.isSynced === false);
           const merged = deduplicateNotes([...unsyncedLocal, ...serverNotes]);
           setNotes(merged);
           setUnsyncedCount(countUnsyncedNotes(merged));
@@ -362,6 +363,7 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
       recordingTitle: note.recordingTitle,
       summary: note.summary,
       keyPoints: note.keyPoints,
+      userId: user.id,
     });
   };
 
@@ -377,6 +379,7 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
       content: updatedNote.content,
       summary: updatedNote.summary,
       keyPoints: updatedNote.keyPoints,
+      userId: user.id,
     });
   };
 
@@ -386,7 +389,7 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
       return;
     }
     
-    deleteMutation.mutate({ id });
+    deleteMutation.mutate({ id, userId: user.id });
   };
 
   const clearAllNotes = async () => {
