@@ -2,8 +2,6 @@
 import { useEffect } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { AuthProvider, useAuth } from '@/hooks/use-auth';
-import { TRPCProvider } from '@/providers/TRPCProvider';
-import { ThemeProvider } from '@/hooks/use-theme';
 
 function RootLayoutNav() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -18,7 +16,7 @@ function RootLayoutNav() {
 
     if (isAuthenticated && inAuthGroup) {
       // User is signed in but still on auth screens, redirect to main app
-      router.replace('/(tabs)' as any); // or your main app route
+      router.replace('/(tabs)' as any);
     } else if (!isAuthenticated && !inAuthGroup) {
       // User is not signed in but trying to access protected routes
       router.replace('/(auth)/login' as any);
@@ -29,19 +27,14 @@ function RootLayoutNav() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      {/* Add other screens here */}
     </Stack>
   );
 }
 
 export default function RootLayout() {
   return (
-    <TRPCProvider>
-      <ThemeProvider>
-        <AuthProvider>
-          <RootLayoutNav />
-        </AuthProvider>
-      </ThemeProvider>
-    </TRPCProvider>
+    <AuthProvider>
+      <RootLayoutNav />
+    </AuthProvider>
   );
 }
