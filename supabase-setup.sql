@@ -84,6 +84,8 @@ CREATE TABLE recordings (
     title TEXT NOT NULL,
     file_type TEXT NOT NULL DEFAULT 'wav',
     transcription TEXT,
+    speaker_segments JSONB,
+    speakers JSONB,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -95,6 +97,7 @@ CREATE TABLE notes (
     title TEXT NOT NULL,
     content TEXT NOT NULL DEFAULT '',
     recording_id TEXT REFERENCES recordings(id) ON DELETE SET NULL, -- Explicit FK, ON DELETE SET NULL for standalone notes
+    recording_title TEXT,
     original_transcription TEXT,
     summary TEXT,
     key_points JSONB,
