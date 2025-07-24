@@ -2,6 +2,8 @@
 import { useEffect } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { AuthProvider, useAuth } from '@/hooks/use-auth';
+import { TRPCProvider } from '@/providers/TRPCProvider';
+import { ThemeProvider } from '@/hooks/use-theme';
 
 function RootLayoutNav() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -33,8 +35,12 @@ function RootLayoutNav() {
 
 export default function RootLayout() {
   return (
-    <AuthProvider>
-      <RootLayoutNav />
-    </AuthProvider>
+    <TRPCProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <RootLayoutNav />
+        </AuthProvider>
+      </ThemeProvider>
+    </TRPCProvider>
   );
 }
