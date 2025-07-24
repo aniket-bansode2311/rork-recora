@@ -38,6 +38,43 @@ interface SpeakerDiarizationResult {
   detected_language?: string;
 }
 
+// Retry utility function with exponential backoff
+const retryWithBackoff = async <T>(
+  fn: () => Promise<T>,
+  maxRetries: number = 3,
+  baseDelay: number = 1000
+): Promise<T> => {
+  let lastError: Error;
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error: any) {
+      lastError = error;
+      
+      // Check if it's a rate limit or system busy error
+      const isRetryableError = 
+        error.message?.includes('system_busy') ||
+        error.message?.includes('429') ||
+        error.message?.includes('rate limit') ||
+        error.message?.includes('heavy traffic');
+      
+      // Don't retry on non-retryable errors or on last attempt
+      if (!isRetryableError || attempt === maxRetries) {
+        throw error;
+      }
+      
+      // Calculate delay with exponential backoff and jitter
+      const delay = baseDelay * Math.pow(2, attempt) + Math.random() * 1000;
+      console.log(`Attempt ${attempt + 1} failed, retrying in ${Math.round(delay)}ms...`);
+      
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  
+  throw lastError!;
+};
+
 export function useTranscription() {
   const [isTranscribing, setIsTranscribing] = useState<string | null>(null);
   const [isDiarizing, setIsDiarizing] = useState<string | null>(null);
@@ -148,24 +185,38 @@ export function useTranscription() {
       // Use null/undefined for auto-detection instead of 'auto'
       // formData.append('language_code', null); // Let ElevenLabs auto-detect
 
-      // Use ElevenLabs Speech-to-Text API
-      const transcriptionResponse = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
-        method: 'POST',
-        headers: {
-          'xi-api-key': apiKey,
-        },
-        body: formData,
-      });
-
-      if (!transcriptionResponse.ok) {
-        const errorText = await transcriptionResponse.text();
-        console.error('ElevenLabs API Error:', {
-          status: transcriptionResponse.status,
-          statusText: transcriptionResponse.statusText,
-          errorBody: errorText
+      // Use ElevenLabs Speech-to-Text API with retry logic
+      const transcriptionResponse = await retryWithBackoff(async () => {
+        const response = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
+          method: 'POST',
+          headers: {
+            'xi-api-key': apiKey,
+          },
+          body: formData,
         });
-        throw new Error(`ElevenLabs transcription failed: ${transcriptionResponse.statusText} - ${errorText}`);
-      }
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('ElevenLabs API Error:', {
+            status: response.status,
+            statusText: response.statusText,
+            errorBody: errorText
+          });
+          
+          // Parse error details for better handling
+          let errorDetails = '';
+          try {
+            const errorJson = JSON.parse(errorText);
+            errorDetails = errorJson.detail?.message || errorText;
+          } catch {
+            errorDetails = errorText;
+          }
+          
+          throw new Error(`ElevenLabs transcription failed: ${response.statusText} - ${errorDetails}`);
+        }
+        
+        return response;
+      }, 3, 2000); // 3 retries with 2 second base delay
 
       const transcriptionResult = await transcriptionResponse.json();
       const originalText = transcriptionResult.text || transcriptionResult.transcript || '';
@@ -222,11 +273,18 @@ export function useTranscription() {
         confidence
       };
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Multi-language transcription error:', error);
+      
+      // Show user-friendly error message based on error type
+      const isRateLimitError = error.message?.includes('system_busy') || error.message?.includes('429');
+      const errorMessage = isRateLimitError 
+        ? "The transcription service is currently busy. Please try again in a few moments."
+        : "Failed to transcribe and translate audio. Please try again.";
+      
       Alert.alert(
         "Transcription Error",
-        "Failed to transcribe and translate audio. Please try again."
+        errorMessage
       );
       return null;
     } finally {
@@ -292,39 +350,49 @@ export function useTranscription() {
       // formData.append('language_code', null); // Let ElevenLabs auto-detect
       formData.append('diarize', 'true');
 
-      const diarizationResponse = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
-        method: 'POST',
-        headers: {
-          'xi-api-key': apiKey,
-        },
-        body: formData,
-      });
-
-      if (!diarizationResponse.ok) {
-        const errorText = await diarizationResponse.text();
-        console.error('ElevenLabs Speaker Diarization Error:', {
-          status: diarizationResponse.status,
-          statusText: diarizationResponse.statusText,
-          errorBody: errorText
+      const diarizationResponse = await retryWithBackoff(async () => {
+        const response = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
+          method: 'POST',
+          headers: {
+            'xi-api-key': apiKey,
+          },
+          body: formData,
         });
-        
-        // Fallback to regular transcription if speaker diarization fails
-        console.warn('Speaker diarization failed, falling back to regular transcription');
-        const regularTranscription = await transcribeAudio(recording);
-        if (regularTranscription) {
-          return {
-            segments: [{
-              speaker: 'Speaker A',
-              text: regularTranscription,
-              start_time: 0,
-              end_time: recording.duration / 1000,
-            }],
-            speakers: ['Speaker A'],
-            full_text: regularTranscription,
-          };
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('ElevenLabs Speaker Diarization Error:', {
+            status: response.status,
+            statusText: response.statusText,
+            errorBody: errorText
+          });
+          
+          // Parse error details for better handling
+          let errorDetails = '';
+          try {
+            const errorJson = JSON.parse(errorText);
+            errorDetails = errorJson.detail?.message || errorText;
+          } catch {
+            errorDetails = errorText;
+          }
+          
+          // Check if it's a retryable error
+          const isRetryable = 
+            response.status === 429 || 
+            errorDetails.includes('system_busy') ||
+            errorDetails.includes('heavy traffic');
+          
+          if (!isRetryable) {
+            // For non-retryable errors, fallback to regular transcription
+            console.warn('Speaker diarization failed with non-retryable error, falling back to regular transcription');
+            throw new Error('NON_RETRYABLE_ERROR'); // Special error to handle fallback
+          }
+          
+          throw new Error(`Speaker diarization failed: ${response.statusText} - ${errorDetails}`);
         }
-        throw new Error(`Speaker diarization failed: ${diarizationResponse.statusText} - ${errorText}`);
-      }
+        
+        return response;
+      }, 3, 2000); // 3 retries with 2 second base delay
 
       const result = await diarizationResponse.json();
       const detectedLanguage = result.language || 'unknown';
@@ -471,11 +539,40 @@ export function useTranscription() {
         };
       }
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Speaker diarization error:', error);
+      
+      // Handle fallback for non-retryable errors
+      if (error.message === 'NON_RETRYABLE_ERROR') {
+        try {
+          console.warn('Attempting fallback to regular transcription...');
+          const regularTranscription = await transcribeAudio(recording);
+          if (regularTranscription) {
+            return {
+              segments: [{
+                speaker: 'Speaker A',
+                text: regularTranscription,
+                start_time: 0,
+                end_time: recording.duration / 1000,
+              }],
+              speakers: ['Speaker A'],
+              full_text: regularTranscription,
+            };
+          }
+        } catch (fallbackError) {
+          console.error('Fallback transcription also failed:', fallbackError);
+        }
+      }
+      
+      // Show user-friendly error message
+      const isRateLimitError = error.message?.includes('system_busy') || error.message?.includes('429');
+      const errorMessage = isRateLimitError 
+        ? "The transcription service is currently busy. Please try again in a few moments."
+        : "Failed to transcribe with speaker separation. Please try again or use regular transcription.";
+      
       Alert.alert(
         "Speaker Diarization Error",
-        "Failed to transcribe with speaker separation. Please try again or use regular transcription."
+        errorMessage
       );
       return null;
     } finally {
