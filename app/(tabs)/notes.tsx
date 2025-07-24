@@ -49,7 +49,7 @@ export default function NotesScreen() {
             <Pressable
               onPress={handleCreateNote}
               style={({ pressed }) => [
-                styles.createButton,
+                styles.headerCreateButton,
                 { backgroundColor: colors.purple.primary },
                 pressed && styles.pressed
               ]}
@@ -82,19 +82,35 @@ export default function NotesScreen() {
           </Pressable>
         </View>
       ) : (
-        <ScrollView 
-          style={styles.notesList}
-          contentContainerStyle={styles.notesListContent}
-          showsVerticalScrollIndicator={false}
-        >
-          {notes.map((note) => (
-            <NoteCard
-              key={note.id}
-              note={note}
-              onPress={() => handleNoteSelect(note)}
-            />
-          ))}
-        </ScrollView>
+        <View style={styles.notesContainer}>
+          <View style={styles.createNoteSection}>
+            <Pressable
+              onPress={handleCreateNote}
+              style={({ pressed }) => [
+                styles.createNoteButton,
+                { backgroundColor: colors.purple.primary },
+                pressed && styles.pressed
+              ]}
+            >
+              <Plus size={18} color="#fff" style={styles.createButtonIcon} />
+              <Text style={styles.createNoteButtonText}>Create New Note</Text>
+            </Pressable>
+          </View>
+          
+          <ScrollView 
+            style={styles.notesList}
+            contentContainerStyle={styles.notesListContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {notes.map((note) => (
+              <NoteCard
+                key={note.id}
+                note={note}
+                onPress={() => handleNoteSelect(note)}
+              />
+            ))}
+          </ScrollView>
+        </View>
       )}
 
       <CreateNoteModal
@@ -112,13 +128,41 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontWeight: "600",
   },
-  createButton: {
+  headerCreateButton: {
     width: 36,
     height: 36,
     borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 4,
+  },
+  notesContainer: {
+    flex: 1,
+  },
+  createNoteSection: {
+    padding: 16,
+    paddingBottom: 8,
+  },
+  createNoteButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  createButtonIcon: {
+    marginRight: 8,
+  },
+  createNoteButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
   },
   pressed: {
     opacity: 0.8,
@@ -162,5 +206,6 @@ const styles = StyleSheet.create({
   },
   notesListContent: {
     padding: 16,
+    paddingTop: 0,
   },
 });

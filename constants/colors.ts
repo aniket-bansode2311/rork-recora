@@ -1,6 +1,6 @@
-const primaryColor = "#7C3AED";
-const secondaryColor = "#A855F7";
-const accentColor = "#C084FC";
+const primaryColor = "#6366F1";
+const secondaryColor = "#8B5CF6";
+const accentColor = "#A78BFA";
 
 export default {
   light: {
@@ -20,12 +20,12 @@ export default {
     recording: "#ff6584",
     recordingBackground: "rgba(255, 101, 132, 0.1)",
     
-    // Rev-inspired colors
+    // Modern purple palette
     purple: {
-      primary: "#7C3AED",
-      secondary: "#A855F7",
-      light: "#C084FC",
-      dark: "#5B21B6",
+      primary: "#6366F1",
+      secondary: "#8B5CF6",
+      light: "#A78BFA",
+      dark: "#4F46E5",
     },
     blue: {
       primary: "#2563EB",
@@ -34,8 +34,8 @@ export default {
       dark: "#1D4ED8",
     },
     gradients: {
-      purple: ["#7C3AED", "#A855F7", "#C084FC"] as const,
-      purpleDark: ["#5B21B6", "#7C3AED"] as const,
+      purple: ["#6366F1", "#8B5CF6", "#A78BFA"] as const,
+      purpleDark: ["#4F46E5", "#6366F1"] as const,
     }
   },
   dark: {
@@ -55,12 +55,12 @@ export default {
     recording: "#ff6584",
     recordingBackground: "rgba(255, 101, 132, 0.1)",
     
-    // Rev-inspired colors
+    // Modern purple palette
     purple: {
-      primary: "#7C3AED",
-      secondary: "#A855F7",
-      light: "#C084FC",
-      dark: "#5B21B6",
+      primary: "#6366F1",
+      secondary: "#8B5CF6",
+      light: "#A78BFA",
+      dark: "#4F46E5",
     },
     blue: {
       primary: "#2563EB",
@@ -69,8 +69,8 @@ export default {
       dark: "#1D4ED8",
     },
     gradients: {
-      purple: ["#7C3AED", "#A855F7", "#C084FC"] as const,
-      purpleDark: ["#5B21B6", "#7C3AED"] as const,
+      purple: ["#6366F1", "#8B5CF6", "#A78BFA"] as const,
+      purpleDark: ["#4F46E5", "#6366F1"] as const,
     }
   },
 };

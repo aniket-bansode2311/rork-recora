@@ -223,8 +223,11 @@ export default function RecordingItem({
 
       {/* Transcription Options Modal */}
       {showTranscribeOptions && (
-        <View style={[styles.optionsOverlay, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
-          <View style={[styles.optionsModal, { backgroundColor: colors.background }]}>
+        <View style={styles.optionsOverlay}>
+          <View style={[styles.optionsModal, { 
+            backgroundColor: colors.background,
+            borderColor: colors.mediumGray 
+          }]}>
             <Text style={[styles.optionsTitle, { color: colors.text }]}>Choose Transcription Type</Text>
             
             <Pressable
@@ -284,13 +287,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     padding: 20,
-    borderRadius: 16,
-    marginBottom: 12,
+    borderRadius: 20,
+    marginBottom: 16,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 6,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.05)",
   },
   infoContainer: {
     flex: 1,
@@ -364,36 +369,42 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   actionButton: {
-    padding: 10,
-    marginLeft: 8,
-    borderRadius: 8,
+    padding: 12,
+    marginLeft: 10,
+    borderRadius: 12,
+    backgroundColor: "rgba(99, 102, 241, 0.08)",
   },
   pressed: {
-    opacity: 0.7,
-    backgroundColor: "rgba(124, 58, 237, 0.1)",
+    opacity: 0.8,
+    transform: [{ scale: 0.98 }],
+    backgroundColor: "rgba(99, 102, 241, 0.1)",
   },
   disabled: {
     opacity: 0.5,
   },
   optionsOverlay: {
     position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    top: -20,
+    left: -20,
+    right: -20,
+    bottom: -20,
     justifyContent: "center",
     alignItems: "center",
     zIndex: 1000,
+    backgroundColor: "rgba(0,0,0,0.6)",
   },
   optionsModal: {
-    padding: 20,
-    borderRadius: 16,
-    width: "90%",
+    padding: 24,
+    borderRadius: 20,
+    width: "85%",
+    maxWidth: 400,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
   },
   optionsTitle: {
     fontSize: 18,

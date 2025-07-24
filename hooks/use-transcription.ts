@@ -332,10 +332,20 @@ export function useTranscription() {
       
       // Process ElevenLabs response format
       if (result.segments && Array.isArray(result.segments)) {
-        const speakerList: string[] = result.segments
-          .map((seg: any) => seg.speaker)
-          .filter((speaker: any): speaker is string => typeof speaker === 'string' && speaker.length > 0);
-        const speakers: string[] = [...new Set(speakerList)];
+        // Create a proper speaker mapping to ensure different speakers get different labels
+        const speakerMap = new Map<string, string>();
+        let speakerCounter = 0;
+        const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        
+        result.segments.forEach((seg: any) => {
+          if (seg.speaker && !speakerMap.has(seg.speaker)) {
+            const speakerLabel = `Speaker ${alphabet[speakerCounter % alphabet.length]}`;
+            speakerMap.set(seg.speaker, speakerLabel);
+            speakerCounter++;
+          }
+        });
+        
+        const speakers: string[] = Array.from(speakerMap.values());
         
         let translatedSegments = result.segments;
         let translatedFullText = '';
@@ -397,7 +407,7 @@ export function useTranscription() {
         
         return {
           segments: translatedSegments.map((seg: any) => ({
-            speaker: seg.speaker || 'Unknown Speaker',
+            speaker: speakerMap.get(seg.speaker) || 'Unknown Speaker',
             text: seg.text || '',
             translated_text: seg.translated_text,
             start_time: seg.start_time || 0,
