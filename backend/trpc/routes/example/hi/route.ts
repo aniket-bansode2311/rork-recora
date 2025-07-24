@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { publicProcedure } from "../../../create-context";
 
-const hiProcedure = publicProcedure
+export default publicProcedure
   .input(z.object({ name: z.string() }))
   .mutation(({ input }) => {
     return {
@@ -9,5 +9,3 @@ const hiProcedure = publicProcedure
       date: new Date(),
     };
   });
-
-export default hiProcedure;

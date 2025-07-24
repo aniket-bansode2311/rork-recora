@@ -4,7 +4,7 @@ import { supabaseAdmin } from "../../../../lib/supabase";
 
 const listRecordingsSchema = z.object({ userId: z.string() });
 
-const listRecordingsProcedure = publicProcedure
+export default publicProcedure
   .input(listRecordingsSchema)
   .query(async ({ input }: { input: z.infer<typeof listRecordingsSchema> }) => {
     try {
@@ -26,8 +26,6 @@ const listRecordingsProcedure = publicProcedure
         title: record.title,
         fileType: record.file_type,
         transcription: record.transcription,
-        translatedTranscription: record.translated_transcription,
-        detectedLanguage: record.detected_language,
         speakerSegments: record.speaker_segments ? JSON.parse(record.speaker_segments) : undefined,
         speakers: record.speakers ? JSON.parse(record.speakers) : undefined,
         createdAt: new Date(record.created_at),
@@ -37,5 +35,3 @@ const listRecordingsProcedure = publicProcedure
       return [];
     }
   });
-
-export default listRecordingsProcedure;

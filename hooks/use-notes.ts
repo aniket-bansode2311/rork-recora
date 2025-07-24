@@ -1,160 +1,314 @@
-import { useState, useEffect } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useAuth } from './use-auth';
-import { Note } from '@/types/note';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import createContextHook from "@nkzw/create-context-hook";
+import { useEffect, useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Note } from "@/types/note";
+import { useAuth } from "@/hooks/use-auth";
+import { trpc } from "@/lib/trpc";
 
-const NOTES_STORAGE_KEY = 'audio_notes';
-
-export const useNotes = () => {
-  const { user } = useAuth();
+export const [NotesProvider, useNotes] = createContextHook(() => {
   const [notes, setNotes] = useState<Note[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
 
-  // Create user-specific storage key
-  const getUserStorageKey = () => {
-    return user?.id ? `${NOTES_STORAGE_KEY}_${user.id}` : NOTES_STORAGE_KEY;
+  const getStorageKey = () => {
+    return user ? `ai_notes_${user.id}` : "ai_notes_guest";
   };
 
-  // Load notes from AsyncStorage
-  const loadNotes = async () => {
-    try {
-      setIsLoading(true);
-      const storageKey = getUserStorageKey();
-      const stored = await AsyncStorage.getItem(storageKey);
-      
-      if (stored) {
-        const parsedNotes = JSON.parse(stored).map((n: any) => ({
-          ...n,
-          createdAt: new Date(n.createdAt),
-          updatedAt: new Date(n.updatedAt),
-        }));
-        // Sort by updated date (most recently updated first)
-        const sortedNotes = parsedNotes.sort((a: Note, b: Note) => 
-          b.updatedAt.getTime() - a.updatedAt.getTime()
-        );
-        setNotes(sortedNotes);
-      } else {
-        setNotes([]);
+  // Helper function to deduplicate notes by ID
+  const deduplicateNotes = (notesList: Note[]): Note[] => {
+    const seen = new Set<string>();
+    return notesList.filter(note => {
+      if (seen.has(note.id)) {
+        return false;
       }
-    } catch (error) {
-      console.error('Error loading notes:', error);
-      setNotes([]);
-    } finally {
-      setIsLoading(false);
-    }
+      seen.add(note.id);
+      return true;
+    });
   };
 
-  // Save notes to AsyncStorage
-  const saveNotes = async (newNotes: Note[]) => {
-    try {
-      const storageKey = getUserStorageKey();
-      await AsyncStorage.setItem(storageKey, JSON.stringify(newNotes));
-    } catch (error) {
-      console.error('Error saving notes:', error);
+  // Fetch notes from database with local storage fallback
+  const notesQuery = trpc.notes.list.useQuery(
+    { userId: user?.id || '' },
+    { 
+      enabled: !!user?.id,
+      retry: 2,
+      staleTime: 30000, // Consider data fresh for 30 seconds
     }
-  };
+  );
 
-  // Create new note
-  const createNote = async (noteData: Omit<Note, 'createdAt' | 'updatedAt'>): Promise<Note | null> => {
-    try {
-      console.log('Creating note:', noteData.title);
+  // Create note mutation
+  const createMutation = trpc.notes.create.useMutation({
+    onMutate: async (newNote) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: [['notes', 'list'], { input: { userId: user?.id || '' } }] });
       
-      const newNote: Note = {
-        ...noteData,
+      // Snapshot previous value
+      const previousNotes = queryClient.getQueryData([['notes', 'list'], { input: { userId: user?.id || '' } }]);
+      
+      // Optimistically update
+      const optimisticNote: Note = {
+        id: newNote.id,
+        title: newNote.title,
+        content: newNote.content,
+        originalTranscription: newNote.originalTranscription,
+        recordingId: newNote.recordingId,
+        recordingTitle: newNote.recordingTitle,
+        summary: newNote.summary,
+        keyPoints: newNote.keyPoints,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
       
-      // Add to the beginning of the array (newest first)
-      const newNotes = [newNote, ...notes];
-      setNotes(newNotes);
-      await saveNotes(newNotes);
+      queryClient.setQueryData([['notes', 'list'], { input: { userId: user?.id || '' } }], (old: Note[] | undefined) => {
+        const oldData = old || [];
+        return deduplicateNotes([optimisticNote, ...oldData]);
+      });
       
-      console.log('Note created successfully. Total notes:', newNotes.length);
-      return newNote;
-    } catch (error) {
-      console.error('Error creating note:', error);
-      return null;
+      return { previousNotes, optimisticNote };
+    },
+    onSuccess: (data, variables, context) => {
+      // Update with server data
+      queryClient.setQueryData([['notes', 'list'], { input: { userId: user?.id || '' } }], (old: Note[] | undefined) => {
+        const oldData = old || [];
+        return deduplicateNotes(oldData.map(n => n.id === variables.id ? {
+          id: data.note.id,
+          title: data.note.title,
+          content: data.note.content,
+          originalTranscription: data.note.originalTranscription,
+          recordingId: data.note.recordingId,
+          recordingTitle: data.note.recordingTitle,
+          summary: data.note.summary,
+          keyPoints: data.note.keyPoints,
+          createdAt: data.note.createdAt,
+          updatedAt: data.note.updatedAt,
+        } : n));
+      });
+    },
+    onError: async (error, variables, context) => {
+      console.warn("Failed to save note to database, saving locally:", error);
+      
+      // Revert optimistic update
+      if (context?.previousNotes) {
+        queryClient.setQueryData([['notes', 'list'], { input: { userId: user?.id || '' } }], context.previousNotes);
+      }
+      
+      // Fallback to local storage
+      try {
+        const currentNotes = notes;
+        const newNote: Note = {
+          id: variables.id,
+          title: variables.title,
+          content: variables.content,
+          originalTranscription: variables.originalTranscription,
+          recordingId: variables.recordingId,
+          recordingTitle: variables.recordingTitle,
+          summary: variables.summary,
+          keyPoints: variables.keyPoints,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+        const updated = deduplicateNotes([newNote, ...currentNotes]);
+        await AsyncStorage.setItem(getStorageKey(), JSON.stringify(updated));
+        setNotes(updated);
+      } catch (storageError) {
+        console.error("Failed to save to local storage:", storageError);
+      }
     }
-  };
+  });
 
-  // Update existing note
-  const updateNote = async (updatedNote: Note) => {
-    try {
-      console.log('Updating note:', updatedNote.id);
+  // Update note mutation
+  const updateMutation = trpc.notes.update.useMutation({
+    onMutate: async (updatedNote) => {
+      await queryClient.cancelQueries({ queryKey: [['notes', 'list'], { input: { userId: user?.id || '' } }] });
       
-      const noteWithUpdatedTime = {
-        ...updatedNote,
-        updatedAt: new Date(),
-      };
+      const previousNotes = queryClient.getQueryData([['notes', 'list'], { input: { userId: user?.id || '' } }]);
       
-      const newNotes = notes.map(n => 
-        n.id === updatedNote.id ? noteWithUpdatedTime : n
-      );
+      queryClient.setQueryData([['notes', 'list'], { input: { userId: user?.id || '' } }], (old: Note[] | undefined) => {
+        const oldData = old || [];
+        return oldData.map(note => 
+          note.id === updatedNote.id 
+            ? { 
+                ...note, 
+                title: updatedNote.title || note.title,
+                content: updatedNote.content || note.content,
+                summary: updatedNote.summary || note.summary,
+                keyPoints: updatedNote.keyPoints || note.keyPoints,
+                updatedAt: new Date()
+              }
+            : note
+        );
+      });
       
-      // Re-sort to move updated note to top
-      const sortedNotes = newNotes.sort((a: Note, b: Note) => 
-        b.updatedAt.getTime() - a.updatedAt.getTime()
-      );
+      return { previousNotes };
+    },
+    onSuccess: () => {
+      // Data is already optimistically updated, no need to refetch
+    },
+    onError: async (error, variables, context) => {
+      console.warn("Failed to update note in database, saving locally:", error);
       
-      setNotes(sortedNotes);
-      await saveNotes(sortedNotes);
+      // Revert optimistic update
+      if (context?.previousNotes) {
+        queryClient.setQueryData([['notes', 'list'], { input: { userId: user?.id || '' } }], context.previousNotes);
+      }
       
-      console.log('Note updated successfully');
-    } catch (error) {
-      console.error('Failed to update note:', error);
+      // Fallback to local storage
+      try {
+        const updated = notes.map(note => 
+          note.id === variables.id 
+            ? { 
+                ...note, 
+                title: variables.title || note.title,
+                content: variables.content || note.content,
+                summary: variables.summary || note.summary,
+                keyPoints: variables.keyPoints || note.keyPoints,
+                updatedAt: new Date()
+              }
+            : note
+        );
+        const deduplicated = deduplicateNotes(updated);
+        await AsyncStorage.setItem(getStorageKey(), JSON.stringify(deduplicated));
+        setNotes(deduplicated);
+      } catch (storageError) {
+        console.error("Failed to update local storage:", storageError);
+      }
     }
-  };
+  });
 
-  // Delete note
-  const deleteNote = async (id: string) => {
-    try {
-      console.log('Deleting note:', id);
+  // Delete note mutation
+  const deleteMutation = trpc.notes.delete.useMutation({
+    onMutate: async (deleteVars) => {
+      await queryClient.cancelQueries({ queryKey: [['notes', 'list'], { input: { userId: user?.id || '' } }] });
       
-      const newNotes = notes.filter(n => n.id !== id);
-      setNotes(newNotes);
-      await saveNotes(newNotes);
+      const previousNotes = queryClient.getQueryData([['notes', 'list'], { input: { userId: user?.id || '' } }]);
       
-      console.log('Note deleted successfully. Remaining notes:', newNotes.length);
-    } catch (error) {
-      console.error('Failed to delete note:', error);
+      queryClient.setQueryData([['notes', 'list'], { input: { userId: user?.id || '' } }], (old: Note[] | undefined) => {
+        return (old || []).filter(note => note.id !== deleteVars.id);
+      });
+      
+      return { previousNotes };
+    },
+    onError: async (error, variables, context) => {
+      console.warn("Failed to delete note from database, removing locally:", error);
+      
+      // Revert optimistic update
+      if (context?.previousNotes) {
+        queryClient.setQueryData([['notes', 'list'], { input: { userId: user?.id || '' } }], context.previousNotes);
+      }
+      
+      // Fallback to local storage
+      try {
+        const updated = notes.filter(note => note.id !== variables.id);
+        const deduplicated = deduplicateNotes(updated);
+        await AsyncStorage.setItem(getStorageKey(), JSON.stringify(deduplicated));
+        setNotes(deduplicated);
+      } catch (storageError) {
+        console.error("Failed to update local storage:", storageError);
+      }
     }
-  };
+  });
 
-  // Clear all notes
-  const clearAllNotes = async () => {
-    try {
-      console.log('Clearing all notes for user:', user?.id);
-      
-      setNotes([]);
-      const storageKey = getUserStorageKey();
-      await AsyncStorage.removeItem(storageKey);
-      
-      console.log('All notes cleared successfully');
-    } catch (error) {
-      console.error('Error clearing notes:', error);
-    }
-  };
-
-  // Load notes when user changes
+  // Load from local storage if database fails
   useEffect(() => {
-    if (user?.id) {
-      console.log('Loading notes for user:', user.id);
-      loadNotes();
-    } else {
-      console.log('No user, clearing notes');
+    const loadFromLocalStorage = async () => {
+      if (!user?.id) return;
+      
+      try {
+        const stored = await AsyncStorage.getItem(getStorageKey());
+        const localNotes = stored ? (JSON.parse(stored) as Note[]) : [];
+        
+        if (notesQuery.data && notesQuery.data.length > 0) {
+          // Use database data and deduplicate
+          const deduplicated = deduplicateNotes(notesQuery.data);
+          setNotes(deduplicated);
+        } else if (notesQuery.isError && localNotes.length > 0) {
+          // Only fallback to local storage if there's an error fetching from database
+          const deduplicated = deduplicateNotes(localNotes);
+          setNotes(deduplicated);
+        } else if (notesQuery.isSuccess) {
+          // Database query succeeded but returned empty, clear local state
+          setNotes([]);
+        }
+      } catch (error) {
+        console.error("Error loading notes:", error);
+        setNotes([]);
+      }
+    };
+
+    if (notesQuery.isSuccess || notesQuery.isError) {
+      loadFromLocalStorage();
+    }
+  }, [notesQuery.data, notesQuery.isSuccess, notesQuery.isError, user?.id]);
+
+  // Clear notes when user changes
+  useEffect(() => {
+    if (!user?.id) {
       setNotes([]);
-      setIsLoading(false);
     }
   }, [user?.id]);
 
-  return {
-    notes,
-    isLoading,
-    createNote,
-    updateNote,
+  const addNote = (note: Note) => {
+    if (!user?.id) {
+      console.warn("Cannot add note: user not authenticated");
+      return;
+    }
+    
+    createMutation.mutate({
+      id: note.id,
+      title: note.title,
+      content: note.content,
+      originalTranscription: note.originalTranscription,
+      recordingId: note.recordingId,
+      recordingTitle: note.recordingTitle,
+      summary: note.summary,
+      keyPoints: note.keyPoints,
+      userId: user.id,
+    });
+  };
+
+  const updateNote = (updatedNote: Note) => {
+    if (!user?.id) {
+      console.warn("Cannot update note: user not authenticated");
+      return;
+    }
+    
+    updateMutation.mutate({
+      id: updatedNote.id,
+      title: updatedNote.title,
+      content: updatedNote.content,
+      summary: updatedNote.summary,
+      keyPoints: updatedNote.keyPoints,
+      userId: user.id,
+    });
+  };
+
+  const deleteNote = (id: string) => {
+    if (!user?.id) {
+      console.warn("Cannot delete note: user not authenticated");
+      return;
+    }
+    
+    deleteMutation.mutate({ id, userId: user.id });
+  };
+
+  const clearAllNotes = async () => {
+    setNotes([]);
+    if (user?.id) {
+      await AsyncStorage.removeItem(getStorageKey());
+    }
+  };
+
+  // Use the query data as the primary source of truth
+  const currentNotes = notesQuery.data ? deduplicateNotes(notesQuery.data) : notes;
+
+  return { 
+    notes: currentNotes, 
+    addNote, 
+    updateNote, 
     deleteNote,
     clearAllNotes,
-    refetch: loadNotes,
+    isLoading: notesQuery.isLoading,
+    error: notesQuery.error
   };
-};
+});

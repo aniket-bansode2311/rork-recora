@@ -14,7 +14,7 @@ const createNoteSchema = z.object({
   userId: z.string(),
 });
 
-const createNoteProcedure = publicProcedure
+export default publicProcedure
   .input(createNoteSchema)
   .mutation(async ({ input }: { input: z.infer<typeof createNoteSchema> }) => {
     try {
@@ -61,5 +61,3 @@ const createNoteProcedure = publicProcedure
       throw new Error('Failed to save note to database');
     }
   });
-
-export default createNoteProcedure;

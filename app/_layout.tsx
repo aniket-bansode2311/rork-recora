@@ -1,40 +1,65 @@
-// app/_layout.tsx
-import { useEffect } from 'react';
-import { Stack, useRouter, useSegments } from 'expo-router';
-import { AuthProvider, useAuth } from '@/hooks/use-auth';
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Stack } from "expo-router";
+import * as SplashScreen from "expo-splash-screen";
+import React, { useEffect } from "react";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { RecordingsProvider } from "@/hooks/use-recordings";
+import { NotesProvider } from "@/hooks/use-notes";
+import { ThemeProvider } from "@/hooks/use-theme";
+import { AuthProvider, useAuth } from "@/hooks/use-auth";
+import { trpc, trpcClient } from "@/lib/trpc";
+
+// Prevent the splash screen from auto-hiding before asset loading is complete.
+SplashScreen.preventAutoHideAsync();
+
+const queryClient = new QueryClient();
 
 function RootLayoutNav() {
   const { isAuthenticated, isLoading } = useAuth();
-  const segments = useSegments();
-  const router = useRouter();
 
   useEffect(() => {
-    // Don't do anything while loading
-    if (isLoading) return;
-
-    const inAuthGroup = segments[0] === '(auth)';
-
-    if (isAuthenticated && inAuthGroup) {
-      // User is signed in but still on auth screens, redirect to main app
-      router.replace('/(tabs)' as any);
-    } else if (!isAuthenticated && !inAuthGroup) {
-      // User is not signed in but trying to access protected routes
-      router.replace('/(auth)/login' as any);
+    if (!isLoading) {
+      SplashScreen.hideAsync();
     }
-  }, [isAuthenticated, segments, isLoading]);
+  }, [isLoading]);
+
+  if (isLoading) {
+    return null; // Show splash screen while loading
+  }
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+    <Stack screenOptions={{ headerBackTitle: "Back" }}>
+      {isAuthenticated ? (
+        <>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="modal" options={{ presentation: "modal" }} />
+        </>
+      ) : (
+        <>
+          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+        </>
+      )}
+      <Stack.Screen name="+not-found" />
     </Stack>
   );
 }
 
 export default function RootLayout() {
   return (
-    <AuthProvider>
-      <RootLayoutNav />
-    </AuthProvider>
+    <trpc.Provider client={trpcClient} queryClient={queryClient}>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider>
+          <AuthProvider>
+            <RecordingsProvider>
+              <NotesProvider>
+                <GestureHandlerRootView style={{ flex: 1 }}>
+                  <RootLayoutNav />
+                </GestureHandlerRootView>
+              </NotesProvider>
+            </RecordingsProvider>
+          </AuthProvider>
+        </ThemeProvider>
+      </QueryClientProvider>
+    </trpc.Provider>
   );
 }

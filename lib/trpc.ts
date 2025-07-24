@@ -1,40 +1,28 @@
-// app/_layout.tsx
-import { useEffect } from 'react';
-import { Stack, useRouter, useSegments } from 'expo-router';
-import { AuthProvider, useAuth } from '@/hooks/use-auth';
+import { createTRPCReact } from "@trpc/react-query";
+import { createTRPCClient, httpLink } from "@trpc/client";
+import type { AppRouter } from "@/backend/trpc/app-router";
+import superjson from "superjson";
 
-function RootLayoutNav() {
-  const { isAuthenticated, isLoading } = useAuth();
-  const segments = useSegments();
-  const router = useRouter();
+export const trpc = createTRPCReact<AppRouter>();
 
-  useEffect(() => {
-    // Don't do anything while loading
-    if (isLoading) return;
+const getBaseUrl = () => {
+  if (process.env.EXPO_PUBLIC_RORK_API_BASE_URL) {
+    return process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
+  }
 
-    const inAuthGroup = segments[0] === '(auth)';
-
-    if (isAuthenticated && inAuthGroup) {
-      // User is signed in but still on auth screens, redirect to main app
-      router.replace('/(tabs)' as any);
-    } else if (!isAuthenticated && !inAuthGroup) {
-      // User is not signed in but trying to access protected routes
-      router.replace('/(auth)/login' as any);
-    }
-  }, [isAuthenticated, segments, isLoading]);
-
-  return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-    </Stack>
+  throw new Error(
+    "No base url found, please set EXPO_PUBLIC_RORK_API_BASE_URL"
   );
-}
+};
 
-export default function RootLayout() {
-  return (
-    <AuthProvider>
-      <RootLayoutNav />
-    </AuthProvider>
-  );
-}
+export const trpcClient = createTRPCClient<AppRouter>({
+  links: [
+    httpLink({
+      url: `${getBaseUrl()}/api/trpc`,
+      transformer: superjson,
+    }),
+  ],
+});
+
+// Create a standalone client for use outside React components
+export const standaloneClient = trpcClient;

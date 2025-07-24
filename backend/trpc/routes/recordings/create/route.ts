@@ -9,8 +9,6 @@ const createRecordingSchema = z.object({
   title: z.string(),
   fileType: z.string(),
   transcription: z.string().optional(),
-  translatedTranscription: z.string().optional(),
-  detectedLanguage: z.string().optional(),
   speakerSegments: z.array(z.object({
     speaker: z.string(),
     text: z.string(),
@@ -21,7 +19,7 @@ const createRecordingSchema = z.object({
   userId: z.string(),
 });
 
-const createRecordingProcedure = publicProcedure
+export default publicProcedure
   .input(createRecordingSchema)
   .mutation(async ({ input }: { input: z.infer<typeof createRecordingSchema> }) => {
     try {
@@ -35,8 +33,6 @@ const createRecordingProcedure = publicProcedure
           title: input.title,
           file_type: input.fileType,
           transcription: input.transcription,
-          translated_transcription: input.translatedTranscription,
-          detected_language: input.detectedLanguage,
           speaker_segments: input.speakerSegments ? JSON.stringify(input.speakerSegments) : null,
           speakers: input.speakers ? JSON.stringify(input.speakers) : null,
           created_at: new Date().toISOString(),
@@ -59,8 +55,6 @@ const createRecordingProcedure = publicProcedure
           title: data.title,
           fileType: data.file_type,
           transcription: data.transcription,
-          translatedTranscription: data.translated_transcription,
-          detectedLanguage: data.detected_language,
           speakerSegments: data.speaker_segments ? JSON.parse(data.speaker_segments) : undefined,
           speakers: data.speakers ? JSON.parse(data.speakers) : undefined,
           createdAt: new Date(data.created_at),
@@ -71,5 +65,3 @@ const createRecordingProcedure = publicProcedure
       throw new Error('Failed to save recording to database');
     }
   });
-
-export default createRecordingProcedure;
