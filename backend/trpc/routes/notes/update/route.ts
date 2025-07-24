@@ -11,7 +11,7 @@ const updateNoteSchema = z.object({
   userId: z.string(),
 });
 
-export default publicProcedure
+const updateNoteProcedure = publicProcedure
   .input(updateNoteSchema)
   .mutation(async ({ input }: { input: z.infer<typeof updateNoteSchema> }) => {
     try {
@@ -61,3 +61,5 @@ export default publicProcedure
       throw new Error('Failed to update note in database');
     }
   });
+
+export default updateNoteProcedure;

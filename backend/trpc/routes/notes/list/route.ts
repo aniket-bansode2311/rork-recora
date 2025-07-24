@@ -4,7 +4,7 @@ import { supabaseAdmin } from "../../../../lib/supabase";
 
 const listNotesSchema = z.object({ userId: z.string() });
 
-export default publicProcedure
+const listNotesProcedure = publicProcedure
   .input(listNotesSchema)
   .query(async ({ input }: { input: z.infer<typeof listNotesSchema> }) => {
     try {
@@ -36,3 +36,5 @@ export default publicProcedure
       return [];
     }
   });
+
+export default listNotesProcedure;

@@ -21,7 +21,7 @@ const createRecordingSchema = z.object({
   userId: z.string(),
 });
 
-export default publicProcedure
+const createRecordingProcedure = publicProcedure
   .input(createRecordingSchema)
   .mutation(async ({ input }: { input: z.infer<typeof createRecordingSchema> }) => {
     try {
@@ -71,3 +71,5 @@ export default publicProcedure
       throw new Error('Failed to save recording to database');
     }
   });
+
+export default createRecordingProcedure;

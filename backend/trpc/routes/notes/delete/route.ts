@@ -7,7 +7,7 @@ const deleteNoteSchema = z.object({
   userId: z.string() 
 });
 
-export default publicProcedure
+const deleteNoteProcedure = publicProcedure
   .input(deleteNoteSchema)
   .mutation(async ({ input }: { input: z.infer<typeof deleteNoteSchema> }) => {
     try {
@@ -31,3 +31,5 @@ export default publicProcedure
       throw new Error('Failed to delete note from database');
     }
   });
+
+export default deleteNoteProcedure;

@@ -5,6 +5,8 @@ import { supabaseAdmin } from "../../../../lib/supabase";
 const updateRecordingSchema = z.object({
   id: z.string(),
   transcription: z.string().optional(),
+  translatedTranscription: z.string().optional(),
+  detectedLanguage: z.string().optional(),
   title: z.string().optional(),
   speakerSegments: z.array(z.object({
     speaker: z.string(),
@@ -16,7 +18,7 @@ const updateRecordingSchema = z.object({
   userId: z.string(),
 });
 
-export default publicProcedure
+const updateRecordingProcedure = publicProcedure
   .input(updateRecordingSchema)
   .mutation(async ({ input }: { input: z.infer<typeof updateRecordingSchema> }) => {
     try {
@@ -26,6 +28,12 @@ export default publicProcedure
 
       if (input.transcription !== undefined) {
         updateData.transcription = input.transcription;
+      }
+      if (input.translatedTranscription !== undefined) {
+        updateData.translated_transcription = input.translatedTranscription;
+      }
+      if (input.detectedLanguage !== undefined) {
+        updateData.detected_language = input.detectedLanguage;
       }
       if (input.title !== undefined) {
         updateData.title = input.title;
@@ -55,6 +63,8 @@ export default publicProcedure
         recording: {
           id: data.id,
           transcription: data.transcription,
+          translatedTranscription: data.translated_transcription,
+          detectedLanguage: data.detected_language,
           title: data.title,
           speakerSegments: data.speaker_segments ? JSON.parse(data.speaker_segments) : undefined,
           speakers: data.speakers ? JSON.parse(data.speakers) : undefined,
@@ -66,3 +76,5 @@ export default publicProcedure
       throw new Error('Failed to update recording in database');
     }
   });
+
+export default updateRecordingProcedure;

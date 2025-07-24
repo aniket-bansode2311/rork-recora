@@ -7,7 +7,7 @@ const deleteRecordingSchema = z.object({
   userId: z.string() 
 });
 
-export default publicProcedure
+const deleteRecordingProcedure = publicProcedure
   .input(deleteRecordingSchema)
   .mutation(async ({ input }: { input: z.infer<typeof deleteRecordingSchema> }) => {
     try {
@@ -31,3 +31,5 @@ export default publicProcedure
       throw new Error('Failed to delete recording from database');
     }
   });
+
+export default deleteRecordingProcedure;
