@@ -145,7 +145,8 @@ export function useTranscription() {
 
       // Add parameters for multi-language support
       formData.append('model_id', 'scribe_v1');
-      formData.append('language_code', 'auto'); // Auto-detect language
+      // Use null/undefined for auto-detection instead of 'auto'
+      // formData.append('language_code', null); // Let ElevenLabs auto-detect
 
       // Use ElevenLabs Speech-to-Text API
       const transcriptionResponse = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
@@ -287,7 +288,8 @@ export function useTranscription() {
 
       // Add multi-language parameters
       formData.append('model_id', 'scribe_v1');
-      formData.append('language_code', 'auto'); // Auto-detect language
+      // Use null/undefined for auto-detection instead of 'auto'
+      // formData.append('language_code', null); // Let ElevenLabs auto-detect
       formData.append('diarize', 'true');
 
       const diarizationResponse = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
