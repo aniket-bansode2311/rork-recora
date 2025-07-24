@@ -132,7 +132,7 @@ export function useTranscription() {
         const file = new File([blob], `recording.${recording.fileType}`, {
           type: `audio/${recording.fileType}`
         });
-        formData.append('audio', file);
+        formData.append('file', file);
       } else {
         // For mobile platforms
         const audioFile = {
@@ -140,13 +140,12 @@ export function useTranscription() {
           name: `recording.${recording.fileType}`,
           type: `audio/${recording.fileType}`
         } as any;
-        formData.append('audio', audioFile);
+        formData.append('file', audioFile);
       }
 
       // Add parameters for multi-language support
-      formData.append('model_id', 'eleven_multilingual_v2');
-      formData.append('language', 'auto'); // Auto-detect language
-      formData.append('response_format', 'json');
+      formData.append('model_id', 'scribe_v1');
+      formData.append('language_code', 'auto'); // Auto-detect language
 
       // Use ElevenLabs Speech-to-Text API
       const transcriptionResponse = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
@@ -248,7 +247,7 @@ export function useTranscription() {
         const file = new File([blob], `recording.${recording.fileType}`, {
           type: `audio/${recording.fileType}`
         });
-        formData.append('audio', file);
+        formData.append('file', file);
       } else {
         // For mobile platforms
         const audioFile = {
@@ -256,11 +255,8 @@ export function useTranscription() {
           name: `recording.${recording.fileType}`,
           type: `audio/${recording.fileType}`
         } as any;
-        formData.append('audio', audioFile);
+        formData.append('file', audioFile);
       }
-
-      // Add speaker diarization parameter
-      formData.append('enable_speaker_diarization', 'true');
 
       // Use ElevenLabs API for speaker diarization with multi-language support
       let apiKey = process.env.EXPO_PUBLIC_ELEVENLABS_API_KEY;
@@ -290,9 +286,9 @@ export function useTranscription() {
       }
 
       // Add multi-language parameters
-      formData.append('model_id', 'eleven_multilingual_v2');
-      formData.append('language', 'auto'); // Auto-detect language
-      formData.append('response_format', 'json');
+      formData.append('model_id', 'scribe_v1');
+      formData.append('language_code', 'auto'); // Auto-detect language
+      formData.append('diarize', 'true');
 
       const diarizationResponse = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
         method: 'POST',
