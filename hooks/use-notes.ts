@@ -1,154 +1,148 @@
 import { useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from './use-auth';
-import { trpc } from '@/lib/trpc';
 import { Note } from '@/types/note';
+
+const NOTES_STORAGE_KEY = 'audio_notes';
 
 export const useNotes = () => {
   const { user } = useAuth();
   const [notes, setNotes] = useState<Note[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // tRPC queries and mutations
-  const notesQuery = trpc.notes.list.useQuery(
-    { userId: user?.id || '' },
-    { 
-      enabled: !!user?.id,
-      onSuccess: (data) => {
-        setNotes(data.map(mapDbNoteToNote));
-        setIsLoading(false);
-      },
-      onError: (error) => {
-        console.error('Error fetching notes:', error);
-        setIsLoading(false);
-      }
-    }
-  );
+  // Create user-specific storage key
+  const getUserStorageKey = () => {
+    return user?.id ? `${NOTES_STORAGE_KEY}_${user.id}` : NOTES_STORAGE_KEY;
+  };
 
-  const createNoteMutation = trpc.notes.create.useMutation({
-    onSuccess: (response) => {
-      if (response.note) {
-        const newNote = mapDbNoteToNote(response.note);
-        setNotes(prev => [newNote, ...prev]);
-      }
-    },
-    onError: (error) => {
-      console.error('Error creating note:', error);
-    }
-  });
-
-  const updateNoteMutation = trpc.notes.update.useMutation({
-    onSuccess: (response) => {
-      if (response.note) {
-        setNotes(prev => 
-          prev.map(note => 
-            note.id === response.note.id 
-              ? { ...note, ...response.note }
-              : note
-          )
-        );
-      }
-    },
-    onError: (error) => {
-      console.error('Error updating note:', error);
-    }
-  });
-
-  const deleteNoteMutation = trpc.notes.delete.useMutation({
-    onSuccess: (response) => {
-      if (response.deletedId) {
-        setNotes(prev => prev.filter(n => n.id !== response.deletedId));
-      }
-    },
-    onError: (error) => {
-      console.error('Error deleting note:', error);
-    }
-  });
-
-  // Helper function to map database note to app note
-  const mapDbNoteToNote = (dbNote: any): Note => ({
-    id: dbNote.id,
-    title: dbNote.title,
-    content: dbNote.content,
-    originalTranscription: dbNote.originalTranscription,
-    recordingId: dbNote.recordingId,
-    recordingTitle: dbNote.recordingTitle,
-    summary: dbNote.summary,
-    keyPoints: dbNote.keyPoints,
-    createdAt: dbNote.createdAt,
-    updatedAt: dbNote.updatedAt,
-  });
-
-  const createNote = async (note: Omit<Note, 'createdAt' | 'updatedAt'>) => {
-    if (!user?.id) {
-      console.error('No user ID available');
-      return null;
-    }
-
+  // Load notes from AsyncStorage
+  const loadNotes = async () => {
     try {
-      const response = await createNoteMutation.mutateAsync({
-        id: note.id,
-        title: note.title,
-        content: note.content,
-        originalTranscription: note.originalTranscription,
-        recordingId: note.recordingId,
-        recordingTitle: note.recordingTitle,
-        summary: note.summary,
-        keyPoints: note.keyPoints,
-        userId: user.id,
-      });
-      return response.note ? mapDbNoteToNote(response.note) : null;
+      setIsLoading(true);
+      const storageKey = getUserStorageKey();
+      const stored = await AsyncStorage.getItem(storageKey);
+      
+      if (stored) {
+        const parsedNotes = JSON.parse(stored).map((n: any) => ({
+          ...n,
+          createdAt: new Date(n.createdAt),
+          updatedAt: new Date(n.updatedAt),
+        }));
+        // Sort by updated date (most recently updated first)
+        const sortedNotes = parsedNotes.sort((a: Note, b: Note) => 
+          b.updatedAt.getTime() - a.updatedAt.getTime()
+        );
+        setNotes(sortedNotes);
+      } else {
+        setNotes([]);
+      }
     } catch (error) {
-      console.error('Failed to create note:', error);
+      console.error('Error loading notes:', error);
+      setNotes([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Save notes to AsyncStorage
+  const saveNotes = async (newNotes: Note[]) => {
+    try {
+      const storageKey = getUserStorageKey();
+      await AsyncStorage.setItem(storageKey, JSON.stringify(newNotes));
+    } catch (error) {
+      console.error('Error saving notes:', error);
+    }
+  };
+
+  // Create new note
+  const createNote = async (noteData: Omit<Note, 'createdAt' | 'updatedAt'>): Promise<Note | null> => {
+    try {
+      console.log('Creating note:', noteData.title);
+      
+      const newNote: Note = {
+        ...noteData,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      
+      // Add to the beginning of the array (newest first)
+      const newNotes = [newNote, ...notes];
+      setNotes(newNotes);
+      await saveNotes(newNotes);
+      
+      console.log('Note created successfully. Total notes:', newNotes.length);
+      return newNote;
+    } catch (error) {
+      console.error('Error creating note:', error);
       return null;
     }
   };
 
-  const updateNote = async (note: Note) => {
-    if (!user?.id) {
-      console.error('No user ID available');
-      return;
-    }
-
+  // Update existing note
+  const updateNote = async (updatedNote: Note) => {
     try {
-      await updateNoteMutation.mutateAsync({
-        id: note.id,
-        title: note.title,
-        content: note.content,
-        summary: note.summary,
-        keyPoints: note.keyPoints,
-        userId: user.id,
-      });
+      console.log('Updating note:', updatedNote.id);
+      
+      const noteWithUpdatedTime = {
+        ...updatedNote,
+        updatedAt: new Date(),
+      };
+      
+      const newNotes = notes.map(n => 
+        n.id === updatedNote.id ? noteWithUpdatedTime : n
+      );
+      
+      // Re-sort to move updated note to top
+      const sortedNotes = newNotes.sort((a: Note, b: Note) => 
+        b.updatedAt.getTime() - a.updatedAt.getTime()
+      );
+      
+      setNotes(sortedNotes);
+      await saveNotes(sortedNotes);
+      
+      console.log('Note updated successfully');
     } catch (error) {
       console.error('Failed to update note:', error);
     }
   };
 
+  // Delete note
   const deleteNote = async (id: string) => {
-    if (!user?.id) {
-      console.error('No user ID available');
-      return;
-    }
-
     try {
-      await deleteNoteMutation.mutateAsync({
-        id,
-        userId: user.id,
-      });
+      console.log('Deleting note:', id);
+      
+      const newNotes = notes.filter(n => n.id !== id);
+      setNotes(newNotes);
+      await saveNotes(newNotes);
+      
+      console.log('Note deleted successfully. Remaining notes:', newNotes.length);
     } catch (error) {
       console.error('Failed to delete note:', error);
     }
   };
 
+  // Clear all notes
   const clearAllNotes = async () => {
-    setNotes([]);
+    try {
+      console.log('Clearing all notes for user:', user?.id);
+      
+      setNotes([]);
+      const storageKey = getUserStorageKey();
+      await AsyncStorage.removeItem(storageKey);
+      
+      console.log('All notes cleared successfully');
+    } catch (error) {
+      console.error('Error clearing notes:', error);
+    }
   };
 
-  // Refetch notes when user changes
+  // Load notes when user changes
   useEffect(() => {
     if (user?.id) {
-      setIsLoading(true);
-      notesQuery.refetch();
+      console.log('Loading notes for user:', user.id);
+      loadNotes();
     } else {
+      console.log('No user, clearing notes');
       setNotes([]);
       setIsLoading(false);
     }
@@ -156,11 +150,11 @@ export const useNotes = () => {
 
   return {
     notes,
-    isLoading: isLoading || notesQuery.isLoading,
+    isLoading,
     createNote,
     updateNote,
     deleteNote,
     clearAllNotes,
-    refetch: notesQuery.refetch,
+    refetch: loadNotes,
   };
 };
