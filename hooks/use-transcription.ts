@@ -96,8 +96,30 @@ export function useTranscription() {
     setIsTranslating(recording.id);
 
     try {
-      const apiKey = process.env.EXPO_PUBLIC_ELEVENLABS_API_KEY;
+      // Try multiple ways to get the API key
+      let apiKey = process.env.EXPO_PUBLIC_ELEVENLABS_API_KEY;
+      
+      // Fallback: try without EXPO_PUBLIC prefix (in case of env loading issues)
       if (!apiKey) {
+        apiKey = process.env.ELEVENLABS_API_KEY;
+      }
+      
+      // Temporary hardcoded fallback for testing (remove in production)
+      if (!apiKey) {
+        apiKey = 'sk_577788b6902027d187ced93cc2ac667c8d379397cb139e1f';
+        console.warn('Using hardcoded API key - this should be fixed in production');
+      }
+      
+      console.log('DEBUG: ElevenLabs API key check:', {
+        hasApiKey: !!apiKey,
+        keyLength: apiKey?.length || 0,
+        keyPrefix: apiKey?.substring(0, 8) || 'none',
+        envVars: Object.keys(process.env).filter(key => key.includes('ELEVEN'))
+      });
+      
+      if (!apiKey) {
+        console.error('ERROR: ElevenLabs API key not found in environment variables');
+        console.error('Available env vars:', Object.keys(process.env));
         throw new Error('ElevenLabs API key not configured');
       }
 
@@ -136,7 +158,13 @@ export function useTranscription() {
       });
 
       if (!transcriptionResponse.ok) {
-        throw new Error(`ElevenLabs transcription failed: ${transcriptionResponse.statusText}`);
+        const errorText = await transcriptionResponse.text();
+        console.error('ElevenLabs API Error:', {
+          status: transcriptionResponse.status,
+          statusText: transcriptionResponse.statusText,
+          errorBody: errorText
+        });
+        throw new Error(`ElevenLabs transcription failed: ${transcriptionResponse.statusText} - ${errorText}`);
       }
 
       const transcriptionResult = await transcriptionResponse.json();
@@ -235,8 +263,29 @@ export function useTranscription() {
       formData.append('enable_speaker_diarization', 'true');
 
       // Use ElevenLabs API for speaker diarization with multi-language support
-      const apiKey = process.env.EXPO_PUBLIC_ELEVENLABS_API_KEY;
+      let apiKey = process.env.EXPO_PUBLIC_ELEVENLABS_API_KEY;
+      
+      // Fallback: try without EXPO_PUBLIC prefix (in case of env loading issues)
       if (!apiKey) {
+        apiKey = process.env.ELEVENLABS_API_KEY;
+      }
+      
+      // Temporary hardcoded fallback for testing (remove in production)
+      if (!apiKey) {
+        apiKey = 'sk_577788b6902027d187ced93cc2ac667c8d379397cb139e1f';
+        console.warn('Using hardcoded API key for speaker diarization - this should be fixed in production');
+      }
+      
+      console.log('DEBUG: Speaker diarization API key check:', {
+        hasApiKey: !!apiKey,
+        keyLength: apiKey?.length || 0,
+        keyPrefix: apiKey?.substring(0, 8) || 'none',
+        envVars: Object.keys(process.env).filter(key => key.includes('ELEVEN'))
+      });
+      
+      if (!apiKey) {
+        console.error('ERROR: ElevenLabs API key not found for speaker diarization');
+        console.error('Available env vars:', Object.keys(process.env));
         throw new Error('ElevenLabs API key not configured');
       }
 
@@ -254,6 +303,13 @@ export function useTranscription() {
       });
 
       if (!diarizationResponse.ok) {
+        const errorText = await diarizationResponse.text();
+        console.error('ElevenLabs Speaker Diarization Error:', {
+          status: diarizationResponse.status,
+          statusText: diarizationResponse.statusText,
+          errorBody: errorText
+        });
+        
         // Fallback to regular transcription if speaker diarization fails
         console.warn('Speaker diarization failed, falling back to regular transcription');
         const regularTranscription = await transcribeAudio(recording);
@@ -269,7 +325,7 @@ export function useTranscription() {
             full_text: regularTranscription,
           };
         }
-        throw new Error(`Speaker diarization failed: ${diarizationResponse.statusText}`);
+        throw new Error(`Speaker diarization failed: ${diarizationResponse.statusText} - ${errorText}`);
       }
 
       const result = await diarizationResponse.json();
