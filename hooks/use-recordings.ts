@@ -1,308 +1,170 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import createContextHook from "@nkzw/create-context-hook";
-import { useEffect, useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Recording } from "@/types/recording";
-import { useAuth } from "@/hooks/use-auth";
-import { trpc } from "@/lib/trpc";
+import { useState, useEffect } from 'react';
+import { useAuth } from './use-auth';
+import { trpc } from '@/lib/trpc';
+import { Recording } from '@/types/recording';
 
-export const [RecordingsProvider, useRecordings] = createContextHook(() => {
-  const [recordings, setRecordings] = useState<Recording[]>([]);
+export const useRecordings = () => {
   const { user } = useAuth();
-  const queryClient = useQueryClient();
+  const [recordings, setRecordings] = useState<Recording[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const getStorageKey = () => {
-    return user ? `audio_recordings_${user.id}` : "audio_recordings_guest";
-  };
-
-  // Helper function to deduplicate recordings by ID
-  const deduplicateRecordings = (recordingsList: Recording[]): Recording[] => {
-    const seen = new Set<string>();
-    return recordingsList.filter(recording => {
-      if (seen.has(recording.id)) {
-        return false;
-      }
-      seen.add(recording.id);
-      return true;
-    });
-  };
-
-  // Fetch recordings from database with local storage fallback
+  // tRPC queries and mutations
   const recordingsQuery = trpc.recordings.list.useQuery(
     { userId: user?.id || '' },
     { 
       enabled: !!user?.id,
-      retry: 2,
-      staleTime: 30000, // Consider data fresh for 30 seconds
+      onSuccess: (data) => {
+        setRecordings(data.map(mapDbRecordingToRecording));
+        setIsLoading(false);
+      },
+      onError: (error) => {
+        console.error('Error fetching recordings:', error);
+        setIsLoading(false);
+      }
     }
   );
 
-  // Create recording mutation
-  const createMutation = trpc.recordings.create.useMutation({
-    onMutate: async (newRecording) => {
-      // Cancel outgoing refetches
-      await queryClient.cancelQueries({ queryKey: [['recordings', 'list'], { input: { userId: user?.id || '' } }] });
-      
-      // Snapshot previous value
-      const previousRecordings = queryClient.getQueryData([['recordings', 'list'], { input: { userId: user?.id || '' } }]);
-      
-      // Optimistically update
-      const optimisticRecording: Recording = {
-        id: newRecording.id,
-        uri: newRecording.uri,
-        duration: newRecording.duration,
-        title: newRecording.title,
-        createdAt: new Date(),
-        fileType: newRecording.fileType,
-        transcription: newRecording.transcription,
-        speakerSegments: newRecording.speakerSegments,
-        speakers: newRecording.speakers,
-      };
-      
-      queryClient.setQueryData([['recordings', 'list'], { input: { userId: user?.id || '' } }], (old: Recording[] | undefined) => {
-        const oldData = old || [];
-        return deduplicateRecordings([optimisticRecording, ...oldData]);
-      });
-      
-      return { previousRecordings, optimisticRecording };
-    },
-    onSuccess: (data, variables, context) => {
-      // Update with server data
-      queryClient.setQueryData([['recordings', 'list'], { input: { userId: user?.id || '' } }], (old: Recording[] | undefined) => {
-        const oldData = old || [];
-        return deduplicateRecordings(oldData.map(r => r.id === variables.id ? {
-          id: data.recording.id,
-          uri: data.recording.uri,
-          duration: data.recording.duration,
-          title: data.recording.title,
-          createdAt: data.recording.createdAt,
-          fileType: data.recording.fileType,
-          transcription: data.recording.transcription,
-          speakerSegments: data.recording.speakerSegments,
-          speakers: data.recording.speakers,
-        } : r));
-      });
-    },
-    onError: async (error, variables, context) => {
-      console.warn("Failed to save recording to database, saving locally:", error);
-      
-      // Revert optimistic update
-      if (context?.previousRecordings) {
-        queryClient.setQueryData([['recordings', 'list'], { input: { userId: user?.id || '' } }], context.previousRecordings);
+  const createRecordingMutation = trpc.recordings.create.useMutation({
+    onSuccess: (response) => {
+      if (response.recording) {
+        const newRecording = mapDbRecordingToRecording(response.recording);
+        setRecordings(prev => [newRecording, ...prev]);
       }
-      
-      // Fallback to local storage
-      try {
-        const currentRecordings = recordings;
-        const newRecording: Recording = {
-          id: variables.id,
-          uri: variables.uri,
-          duration: variables.duration,
-          title: variables.title,
-          createdAt: new Date(),
-          fileType: variables.fileType,
-          transcription: variables.transcription,
-          speakerSegments: variables.speakerSegments,
-          speakers: variables.speakers,
-        };
-        const updated = deduplicateRecordings([newRecording, ...currentRecordings]);
-        await AsyncStorage.setItem(getStorageKey(), JSON.stringify(updated));
-        setRecordings(updated);
-      } catch (storageError) {
-        console.error("Failed to save to local storage:", storageError);
-      }
+    },
+    onError: (error) => {
+      console.error('Error creating recording:', error);
     }
   });
 
-  // Update recording mutation
-  const updateMutation = trpc.recordings.update.useMutation({
-    onMutate: async (updatedRecording) => {
-      await queryClient.cancelQueries({ queryKey: [['recordings', 'list'], { input: { userId: user?.id || '' } }] });
-      
-      const previousRecordings = queryClient.getQueryData([['recordings', 'list'], { input: { userId: user?.id || '' } }]);
-      
-      queryClient.setQueryData([['recordings', 'list'], { input: { userId: user?.id || '' } }], (old: Recording[] | undefined) => {
-        const oldData = old || [];
-        return oldData.map(recording => 
-          recording.id === updatedRecording.id 
-            ? { 
-                ...recording, 
-                transcription: updatedRecording.transcription || recording.transcription, 
-                title: updatedRecording.title || recording.title,
-                speakerSegments: updatedRecording.speakerSegments || recording.speakerSegments,
-                speakers: updatedRecording.speakers || recording.speakers,
-              }
-            : recording
+  const updateRecordingMutation = trpc.recordings.update.useMutation({
+    onSuccess: (response) => {
+      if (response.recording) {
+        setRecordings(prev => 
+          prev.map(recording => 
+            recording.id === response.recording.id 
+              ? { ...recording, ...response.recording }
+              : recording
+          )
         );
-      });
-      
-      return { previousRecordings };
-    },
-    onSuccess: () => {
-      // Data is already optimistically updated, no need to refetch
-    },
-    onError: async (error, variables, context) => {
-      console.warn("Failed to update recording in database, saving locally:", error);
-      
-      // Revert optimistic update
-      if (context?.previousRecordings) {
-        queryClient.setQueryData([['recordings', 'list'], { input: { userId: user?.id || '' } }], context.previousRecordings);
       }
-      
-      // Fallback to local storage
-      try {
-        const updated = recordings.map(recording => 
-          recording.id === variables.id 
-            ? { 
-                ...recording, 
-                transcription: variables.transcription || recording.transcription, 
-                title: variables.title || recording.title,
-                speakerSegments: variables.speakerSegments || recording.speakerSegments,
-                speakers: variables.speakers || recording.speakers,
-              }
-            : recording
-        );
-        const deduplicated = deduplicateRecordings(updated);
-        await AsyncStorage.setItem(getStorageKey(), JSON.stringify(deduplicated));
-        setRecordings(deduplicated);
-      } catch (storageError) {
-        console.error("Failed to update local storage:", storageError);
-      }
+    },
+    onError: (error) => {
+      console.error('Error updating recording:', error);
     }
   });
 
-  // Delete recording mutation
-  const deleteMutation = trpc.recordings.delete.useMutation({
-    onMutate: async (deleteVars) => {
-      await queryClient.cancelQueries({ queryKey: [['recordings', 'list'], { input: { userId: user?.id || '' } }] });
-      
-      const previousRecordings = queryClient.getQueryData([['recordings', 'list'], { input: { userId: user?.id || '' } }]);
-      
-      queryClient.setQueryData([['recordings', 'list'], { input: { userId: user?.id || '' } }], (old: Recording[] | undefined) => {
-        return (old || []).filter(recording => recording.id !== deleteVars.id);
-      });
-      
-      return { previousRecordings };
+  const deleteRecordingMutation = trpc.recordings.delete.useMutation({
+    onSuccess: (response) => {
+      if (response.deletedId) {
+        setRecordings(prev => prev.filter(r => r.id !== response.deletedId));
+      }
     },
-    onError: async (error, variables, context) => {
-      console.warn("Failed to delete recording from database, removing locally:", error);
-      
-      // Revert optimistic update
-      if (context?.previousRecordings) {
-        queryClient.setQueryData([['recordings', 'list'], { input: { userId: user?.id || '' } }], context.previousRecordings);
-      }
-      
-      // Fallback to local storage
-      try {
-        const updated = recordings.filter(recording => recording.id !== variables.id);
-        await AsyncStorage.setItem(getStorageKey(), JSON.stringify(updated));
-        setRecordings(updated);
-      } catch (storageError) {
-        console.error("Failed to update local storage:", storageError);
-      }
+    onError: (error) => {
+      console.error('Error deleting recording:', error);
     }
   });
 
-  // Load from local storage if database fails
-  useEffect(() => {
-    const loadFromLocalStorage = async () => {
-      if (!user?.id) return;
-      
-      try {
-        const stored = await AsyncStorage.getItem(getStorageKey());
-        const localRecordings = stored ? (JSON.parse(stored) as Recording[]) : [];
-        
-        if (recordingsQuery.data && recordingsQuery.data.length > 0) {
-          // Use database data and deduplicate
-          const deduplicated = deduplicateRecordings(recordingsQuery.data);
-          setRecordings(deduplicated);
-        } else if (recordingsQuery.isError && localRecordings.length > 0) {
-          // Only fallback to local storage if there's an error fetching from database
-          const deduplicated = deduplicateRecordings(localRecordings);
-          setRecordings(deduplicated);
-        } else if (recordingsQuery.isSuccess) {
-          // Database query succeeded but returned empty, clear local state
-          setRecordings([]);
-        }
-      } catch (error) {
-        console.error("Error loading recordings:", error);
-        setRecordings([]);
-      }
-    };
+  // Helper function to map database recording to app recording
+  const mapDbRecordingToRecording = (dbRecording: any): Recording => ({
+    id: dbRecording.id,
+    uri: dbRecording.uri,
+    duration: dbRecording.duration,
+    title: dbRecording.title,
+    fileType: dbRecording.fileType,
+    transcription: dbRecording.transcription,
+    translatedTranscription: dbRecording.translatedTranscription,
+    detectedLanguage: dbRecording.detectedLanguage,
+    speakerSegments: dbRecording.speakerSegments,
+    speakers: dbRecording.speakers,
+    createdAt: dbRecording.createdAt,
+  });
 
-    if (recordingsQuery.isSuccess || recordingsQuery.isError) {
-      loadFromLocalStorage();
-    }
-  }, [recordingsQuery.data, recordingsQuery.isSuccess, recordingsQuery.isError, user?.id]);
-
-  // Clear recordings when user changes
-  useEffect(() => {
+  const addRecording = async (recording: Recording) => {
     if (!user?.id) {
-      setRecordings([]);
-    }
-  }, [user?.id]);
-
-  const addRecording = (recording: Recording) => {
-    if (!user?.id) {
-      console.warn("Cannot add recording: user not authenticated");
+      console.error('No user ID available');
       return;
     }
-    
-    createMutation.mutate({
-      id: recording.id,
-      uri: recording.uri,
-      duration: recording.duration,
-      title: recording.title,
-      fileType: recording.fileType,
-      transcription: recording.transcription,
-      speakerSegments: recording.speakerSegments,
-      speakers: recording.speakers,
-      userId: user.id,
-    });
+
+    try {
+      await createRecordingMutation.mutateAsync({
+        id: recording.id,
+        uri: recording.uri,
+        duration: recording.duration,
+        title: recording.title,
+        fileType: recording.fileType,
+        transcription: recording.transcription,
+        translatedTranscription: recording.translatedTranscription,
+        detectedLanguage: recording.detectedLanguage,
+        speakerSegments: recording.speakerSegments,
+        speakers: recording.speakers,
+        userId: user.id,
+      });
+    } catch (error) {
+      console.error('Failed to add recording:', error);
+      // Optionally show user-friendly error message
+    }
   };
 
-  const deleteRecording = (id: string) => {
+  const updateRecording = async (recording: Recording) => {
     if (!user?.id) {
-      console.warn("Cannot delete recording: user not authenticated");
+      console.error('No user ID available');
       return;
     }
-    
-    deleteMutation.mutate({ id, userId: user.id });
+
+    try {
+      await updateRecordingMutation.mutateAsync({
+        id: recording.id,
+        title: recording.title,
+        transcription: recording.transcription,
+        translatedTranscription: recording.translatedTranscription,
+        detectedLanguage: recording.detectedLanguage,
+        speakerSegments: recording.speakerSegments,
+        speakers: recording.speakers,
+        userId: user.id,
+      });
+    } catch (error) {
+      console.error('Failed to update recording:', error);
+    }
   };
 
-  const updateRecording = (updatedRecording: Recording) => {
+  const deleteRecording = async (id: string) => {
     if (!user?.id) {
-      console.warn("Cannot update recording: user not authenticated");
+      console.error('No user ID available');
       return;
     }
-    
-    updateMutation.mutate({
-      id: updatedRecording.id,
-      transcription: updatedRecording.transcription,
-      title: updatedRecording.title,
-      speakerSegments: updatedRecording.speakerSegments,
-      speakers: updatedRecording.speakers,
-      userId: user.id,
-    });
+
+    try {
+      await deleteRecordingMutation.mutateAsync({
+        id,
+        userId: user.id,
+      });
+    } catch (error) {
+      console.error('Failed to delete recording:', error);
+    }
   };
 
   const clearAllRecordings = async () => {
     setRecordings([]);
+  };
+
+  // Refetch recordings when user changes
+  useEffect(() => {
     if (user?.id) {
-      await AsyncStorage.removeItem(getStorageKey());
+      setIsLoading(true);
+      recordingsQuery.refetch();
+    } else {
+      setRecordings([]);
+      setIsLoading(false);
     }
-  };
+  }, [user?.id]);
 
-  // Use the query data as the primary source of truth
-  const currentRecordings = recordingsQuery.data ? deduplicateRecordings(recordingsQuery.data) : recordings;
-
-  return { 
-    recordings: currentRecordings, 
-    addRecording, 
-    deleteRecording, 
+  return {
+    recordings,
+    isLoading: isLoading || recordingsQuery.isLoading,
+    addRecording,
     updateRecording,
+    deleteRecording,
     clearAllRecordings,
-    isLoading: recordingsQuery.isLoading,
-    error: recordingsQuery.error
+    refetch: recordingsQuery.refetch,
   };
-});
+};
