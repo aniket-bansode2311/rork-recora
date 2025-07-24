@@ -39,80 +39,23 @@ export const [RecordingsProvider, useRecordings] = createContextHook(() => {
 
   // Create recording mutation
   const createMutation = trpc.recordings.create.useMutation({
-    onMutate: async (newRecording) => {
-      console.log('CREATE_MUTATION_MUTATE: Starting optimistic update...', {
-        recordingId: newRecording.id,
-        userId: newRecording.userId
-      });
-      
-      // Cancel outgoing refetches
-      await queryClient.cancelQueries({ queryKey: [['recordings', 'list'], { input: { userId: user?.id || '' } }] });
-      
-      // Snapshot previous value
-      const previousRecordings = queryClient.getQueryData([['recordings', 'list'], { input: { userId: user?.id || '' } }]);
-      console.log('CREATE_MUTATION_MUTATE: Previous recordings count:', Array.isArray(previousRecordings) ? previousRecordings.length : 0);
-      
-      // Optimistically update
-      const optimisticRecording: Recording = {
-        id: newRecording.id,
-        uri: newRecording.uri,
-        duration: newRecording.duration,
-        title: newRecording.title,
-        createdAt: new Date(),
-        fileType: newRecording.fileType,
-        transcription: newRecording.transcription,
-        speakerSegments: newRecording.speakerSegments,
-        speakers: newRecording.speakers,
-      };
-      
-      queryClient.setQueryData([['recordings', 'list'], { input: { userId: user?.id || '' } }], (old: Recording[] | undefined) => {
-        const oldData = old || [];
-        const updated = deduplicateRecordings([optimisticRecording, ...oldData]);
-        console.log('CREATE_MUTATION_MUTATE: Optimistic update applied, new count:', updated.length);
-        return updated;
-      });
-      
-      console.log('CREATE_MUTATION_MUTATE: Optimistic update completed');
-      return { previousRecordings, optimisticRecording };
-    },
-    onSuccess: (data, variables, context) => {
+    onSuccess: (data, variables) => {
       console.log('CREATE_MUTATION_SUCCESS: Recording saved to database successfully:', {
         recordingId: data.recording.id,
         title: data.recording.title,
         userId: variables.userId
       });
       
-      // Update with server data
-      queryClient.setQueryData([['recordings', 'list'], { input: { userId: user?.id || '' } }], (old: Recording[] | undefined) => {
-        const oldData = old || [];
-        const updated = deduplicateRecordings(oldData.map(r => r.id === variables.id ? {
-          id: data.recording.id,
-          uri: data.recording.uri,
-          duration: data.recording.duration,
-          title: data.recording.title,
-          createdAt: data.recording.createdAt,
-          fileType: data.recording.fileType,
-          transcription: data.recording.transcription,
-          speakerSegments: data.recording.speakerSegments,
-          speakers: data.recording.speakers,
-        } : r));
-        console.log('CREATE_MUTATION_SUCCESS: Server data applied, final count:', updated.length);
-        return updated;
-      });
+      // Invalidate and refetch recordings
+      queryClient.invalidateQueries({ queryKey: [['recordings', 'list']] });
     },
-    onError: async (error, variables, context) => {
+    onError: async (error, variables) => {
       console.error('CREATE_MUTATION_ERROR: Failed to save recording to database:', {
         error: error instanceof Error ? error.message : 'Unknown error',
         recordingId: variables.id,
         userId: variables.userId,
         stack: error instanceof Error ? error.stack : undefined
       });
-      
-      // Revert optimistic update
-      if (context?.previousRecordings) {
-        console.log('CREATE_MUTATION_ERROR: Reverting optimistic update...');
-        queryClient.setQueryData([['recordings', 'list'], { input: { userId: user?.id || '' } }], context.previousRecordings);
-      }
       
       // Fallback to local storage
       try {
@@ -144,38 +87,12 @@ export const [RecordingsProvider, useRecordings] = createContextHook(() => {
 
   // Update recording mutation
   const updateMutation = trpc.recordings.update.useMutation({
-    onMutate: async (updatedRecording) => {
-      await queryClient.cancelQueries({ queryKey: [['recordings', 'list'], { input: { userId: user?.id || '' } }] });
-      
-      const previousRecordings = queryClient.getQueryData([['recordings', 'list'], { input: { userId: user?.id || '' } }]);
-      
-      queryClient.setQueryData([['recordings', 'list'], { input: { userId: user?.id || '' } }], (old: Recording[] | undefined) => {
-        const oldData = old || [];
-        return oldData.map(recording => 
-          recording.id === updatedRecording.id 
-            ? { 
-                ...recording, 
-                transcription: updatedRecording.transcription || recording.transcription, 
-                title: updatedRecording.title || recording.title,
-                speakerSegments: updatedRecording.speakerSegments || recording.speakerSegments,
-                speakers: updatedRecording.speakers || recording.speakers,
-              }
-            : recording
-        );
-      });
-      
-      return { previousRecordings };
-    },
     onSuccess: () => {
-      // Data is already optimistically updated, no need to refetch
+      // Invalidate and refetch recordings
+      queryClient.invalidateQueries({ queryKey: [['recordings', 'list']] });
     },
-    onError: async (error, variables, context) => {
+    onError: async (error, variables) => {
       console.warn("Failed to update recording in database, saving locally:", error);
-      
-      // Revert optimistic update
-      if (context?.previousRecordings) {
-        queryClient.setQueryData([['recordings', 'list'], { input: { userId: user?.id || '' } }], context.previousRecordings);
-      }
       
       // Fallback to local storage
       try {
@@ -201,24 +118,12 @@ export const [RecordingsProvider, useRecordings] = createContextHook(() => {
 
   // Delete recording mutation
   const deleteMutation = trpc.recordings.delete.useMutation({
-    onMutate: async (deleteVars) => {
-      await queryClient.cancelQueries({ queryKey: [['recordings', 'list'], { input: { userId: user?.id || '' } }] });
-      
-      const previousRecordings = queryClient.getQueryData([['recordings', 'list'], { input: { userId: user?.id || '' } }]);
-      
-      queryClient.setQueryData([['recordings', 'list'], { input: { userId: user?.id || '' } }], (old: Recording[] | undefined) => {
-        return (old || []).filter(recording => recording.id !== deleteVars.id);
-      });
-      
-      return { previousRecordings };
+    onSuccess: () => {
+      // Invalidate and refetch recordings
+      queryClient.invalidateQueries({ queryKey: [['recordings', 'list']] });
     },
-    onError: async (error, variables, context) => {
+    onError: async (error, variables) => {
       console.warn("Failed to delete recording from database, removing locally:", error);
-      
-      // Revert optimistic update
-      if (context?.previousRecordings) {
-        queryClient.setQueryData([['recordings', 'list'], { input: { userId: user?.id || '' } }], context.previousRecordings);
-      }
       
       // Fallback to local storage
       try {
@@ -352,6 +257,17 @@ export const [RecordingsProvider, useRecordings] = createContextHook(() => {
 
   // Use the query data as the primary source of truth
   const currentRecordings = recordingsQuery.data ? deduplicateRecordings(recordingsQuery.data) : recordings;
+
+  // Debug logging for data flow
+  console.log('USE_RECORDINGS_HOOK: Current state:', {
+    queryData: recordingsQuery.data?.length || 0,
+    localRecordings: recordings.length,
+    currentRecordings: currentRecordings.length,
+    isLoading: recordingsQuery.isLoading,
+    isError: recordingsQuery.isError,
+    hasUser: !!user?.id,
+    userId: user?.id
+  });
 
   return { 
     recordings: currentRecordings, 

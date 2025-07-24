@@ -39,59 +39,12 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
 
   // Create note mutation
   const createMutation = trpc.notes.create.useMutation({
-    onMutate: async (newNote) => {
-      // Cancel outgoing refetches
-      await queryClient.cancelQueries({ queryKey: [['notes', 'list'], { input: { userId: user?.id || '' } }] });
-      
-      // Snapshot previous value
-      const previousNotes = queryClient.getQueryData([['notes', 'list'], { input: { userId: user?.id || '' } }]);
-      
-      // Optimistically update
-      const optimisticNote: Note = {
-        id: newNote.id,
-        title: newNote.title,
-        content: newNote.content,
-        originalTranscription: newNote.originalTranscription,
-        recordingId: newNote.recordingId,
-        recordingTitle: newNote.recordingTitle,
-        summary: newNote.summary,
-        keyPoints: newNote.keyPoints,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-      
-      queryClient.setQueryData([['notes', 'list'], { input: { userId: user?.id || '' } }], (old: Note[] | undefined) => {
-        const oldData = old || [];
-        return deduplicateNotes([optimisticNote, ...oldData]);
-      });
-      
-      return { previousNotes, optimisticNote };
+    onSuccess: () => {
+      // Invalidate and refetch notes
+      queryClient.invalidateQueries({ queryKey: [['notes', 'list']] });
     },
-    onSuccess: (data, variables, context) => {
-      // Update with server data
-      queryClient.setQueryData([['notes', 'list'], { input: { userId: user?.id || '' } }], (old: Note[] | undefined) => {
-        const oldData = old || [];
-        return deduplicateNotes(oldData.map(n => n.id === variables.id ? {
-          id: data.note.id,
-          title: data.note.title,
-          content: data.note.content,
-          originalTranscription: data.note.originalTranscription,
-          recordingId: data.note.recordingId,
-          recordingTitle: data.note.recordingTitle,
-          summary: data.note.summary,
-          keyPoints: data.note.keyPoints,
-          createdAt: data.note.createdAt,
-          updatedAt: data.note.updatedAt,
-        } : n));
-      });
-    },
-    onError: async (error, variables, context) => {
+    onError: async (error, variables) => {
       console.warn("Failed to save note to database, saving locally:", error);
-      
-      // Revert optimistic update
-      if (context?.previousNotes) {
-        queryClient.setQueryData([['notes', 'list'], { input: { userId: user?.id || '' } }], context.previousNotes);
-      }
       
       // Fallback to local storage
       try {
@@ -119,39 +72,12 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
 
   // Update note mutation
   const updateMutation = trpc.notes.update.useMutation({
-    onMutate: async (updatedNote) => {
-      await queryClient.cancelQueries({ queryKey: [['notes', 'list'], { input: { userId: user?.id || '' } }] });
-      
-      const previousNotes = queryClient.getQueryData([['notes', 'list'], { input: { userId: user?.id || '' } }]);
-      
-      queryClient.setQueryData([['notes', 'list'], { input: { userId: user?.id || '' } }], (old: Note[] | undefined) => {
-        const oldData = old || [];
-        return oldData.map(note => 
-          note.id === updatedNote.id 
-            ? { 
-                ...note, 
-                title: updatedNote.title || note.title,
-                content: updatedNote.content || note.content,
-                summary: updatedNote.summary || note.summary,
-                keyPoints: updatedNote.keyPoints || note.keyPoints,
-                updatedAt: new Date()
-              }
-            : note
-        );
-      });
-      
-      return { previousNotes };
-    },
     onSuccess: () => {
-      // Data is already optimistically updated, no need to refetch
+      // Invalidate and refetch notes
+      queryClient.invalidateQueries({ queryKey: [['notes', 'list']] });
     },
-    onError: async (error, variables, context) => {
+    onError: async (error, variables) => {
       console.warn("Failed to update note in database, saving locally:", error);
-      
-      // Revert optimistic update
-      if (context?.previousNotes) {
-        queryClient.setQueryData([['notes', 'list'], { input: { userId: user?.id || '' } }], context.previousNotes);
-      }
       
       // Fallback to local storage
       try {
@@ -178,24 +104,12 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
 
   // Delete note mutation
   const deleteMutation = trpc.notes.delete.useMutation({
-    onMutate: async (deleteVars) => {
-      await queryClient.cancelQueries({ queryKey: [['notes', 'list'], { input: { userId: user?.id || '' } }] });
-      
-      const previousNotes = queryClient.getQueryData([['notes', 'list'], { input: { userId: user?.id || '' } }]);
-      
-      queryClient.setQueryData([['notes', 'list'], { input: { userId: user?.id || '' } }], (old: Note[] | undefined) => {
-        return (old || []).filter(note => note.id !== deleteVars.id);
-      });
-      
-      return { previousNotes };
+    onSuccess: () => {
+      // Invalidate and refetch notes
+      queryClient.invalidateQueries({ queryKey: [['notes', 'list']] });
     },
-    onError: async (error, variables, context) => {
+    onError: async (error, variables) => {
       console.warn("Failed to delete note from database, removing locally:", error);
-      
-      // Revert optimistic update
-      if (context?.previousNotes) {
-        queryClient.setQueryData([['notes', 'list'], { input: { userId: user?.id || '' } }], context.previousNotes);
-      }
       
       // Fallback to local storage
       try {
@@ -301,6 +215,17 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
 
   // Use the query data as the primary source of truth
   const currentNotes = notesQuery.data ? deduplicateNotes(notesQuery.data) : notes;
+
+  // Debug logging for data flow
+  console.log('USE_NOTES_HOOK: Current state:', {
+    queryData: notesQuery.data?.length || 0,
+    localNotes: notes.length,
+    currentNotes: currentNotes.length,
+    isLoading: notesQuery.isLoading,
+    isError: notesQuery.isError,
+    hasUser: !!user?.id,
+    userId: user?.id
+  });
 
   return { 
     notes: currentNotes, 
