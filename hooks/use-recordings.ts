@@ -244,9 +244,18 @@ export const [RecordingsProvider, useRecordings] = createContextHook(() => {
 
   const addRecording = (recording: Recording) => {
     if (!user?.id) {
-      console.warn("Cannot add recording: user not authenticated");
+      console.error("Cannot add recording: user not authenticated", { user });
       return;
     }
+    
+    console.log('Adding recording to database:', {
+      id: recording.id,
+      uri: recording.uri,
+      duration: recording.duration,
+      title: recording.title,
+      fileType: recording.fileType,
+      userId: user.id,
+    });
     
     createMutation.mutate({
       id: recording.id,

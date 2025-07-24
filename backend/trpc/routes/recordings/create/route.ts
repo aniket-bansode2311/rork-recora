@@ -23,6 +23,25 @@ export default publicProcedure
   .input(createRecordingSchema)
   .mutation(async ({ input }: { input: z.infer<typeof createRecordingSchema> }) => {
     try {
+      console.log('Creating recording in database:', {
+        id: input.id,
+        userId: input.userId,
+        title: input.title,
+        duration: input.duration,
+        fileType: input.fileType
+      });
+
+      // Validate required fields
+      if (!input.userId) {
+        throw new Error('User ID is required');
+      }
+      if (!input.id) {
+        throw new Error('Recording ID is required');
+      }
+      if (!input.uri) {
+        throw new Error('Recording URI is required');
+      }
+
       const { data, error } = await supabaseAdmin
         .from('recordings')
         .insert({
@@ -42,9 +61,21 @@ export default publicProcedure
         .single();
 
       if (error) {
-        console.error('Supabase error creating recording:', error);
+        console.error('Supabase error creating recording:', {
+          error,
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint
+        });
         throw new Error(`Failed to save recording: ${error.message}`);
       }
+
+      if (!data) {
+        throw new Error('No data returned from database');
+      }
+
+      console.log('Recording created successfully:', data.id);
 
       return {
         success: true,
@@ -62,6 +93,6 @@ export default publicProcedure
       };
     } catch (error) {
       console.error('Error creating recording:', error);
-      throw new Error('Failed to save recording to database');
+      throw new Error(`Failed to save recording to database: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   });

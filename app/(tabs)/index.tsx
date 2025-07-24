@@ -6,6 +6,7 @@ import * as Haptics from "expo-haptics";
 import { Stack } from "expo-router";
 import { useRecordings } from "@/hooks/use-recordings";
 import { useTheme } from "@/hooks/use-theme";
+import { useAuth } from "@/hooks/use-auth";
 import RecordButton from "@/components/RecordButton";
 import AudioWaveform from "@/components/AudioWaveform";
 import Timer from "@/components/Timer";
@@ -17,11 +18,25 @@ export default function RecordScreen() {
   const [startTime, setStartTime] = useState<number | null>(null);
   const { addRecording } = useRecordings();
   const { colors } = useTheme();
+  const { user, isAuthenticated } = useAuth();
 
   const startRecording = async () => {
     try {
+      // Check authentication first
+      if (!isAuthenticated || !user) {
+        Alert.alert("Authentication Required", "Please sign in to record audio.");
+        return;
+      }
+
+      console.log('Starting recording for user:', user.email);
+
       if (Platform.OS !== 'web') {
-        await Audio.requestPermissionsAsync();
+        const { status } = await Audio.requestPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert("Permission Required", "Please grant microphone permission to record audio.");
+          return;
+        }
+        
         await Audio.setAudioModeAsync({
           allowsRecordingIOS: true,
           playsInSilentModeIOS: true,
@@ -30,59 +45,31 @@ export default function RecordScreen() {
 
       const newRecording = new Audio.Recording();
       
-      if (Platform.OS !== 'web') {
-        await newRecording.prepareToRecordAsync({
-          android: {
-            extension: '.m4a',
-            outputFormat: Audio.AndroidOutputFormat.MPEG_4,
-            audioEncoder: Audio.AndroidAudioEncoder.AAC,
-            sampleRate: 44100,
-            numberOfChannels: 2,
-            bitRate: 128000,
-          },
-          ios: {
-            extension: '.wav',
-            outputFormat: Audio.IOSOutputFormat.LINEARPCM,
-            audioQuality: Audio.IOSAudioQuality.HIGH,
-            sampleRate: 44100,
-            numberOfChannels: 2,
-            bitRate: 128000,
-            linearPCMBitDepth: 16,
-            linearPCMIsBigEndian: false,
-            linearPCMIsFloat: false,
-          },
-          web: {
-            mimeType: 'audio/webm;codecs=opus',
-            bitsPerSecond: 128000,
-          },
-        });
-      } else {
-        await newRecording.prepareToRecordAsync({
-          android: {
-            extension: '.m4a',
-            outputFormat: Audio.AndroidOutputFormat.MPEG_4,
-            audioEncoder: Audio.AndroidAudioEncoder.AAC,
-            sampleRate: 44100,
-            numberOfChannels: 2,
-            bitRate: 128000,
-          },
-          ios: {
-            extension: '.wav',
-            outputFormat: Audio.IOSOutputFormat.LINEARPCM,
-            audioQuality: Audio.IOSAudioQuality.HIGH,
-            sampleRate: 44100,
-            numberOfChannels: 2,
-            bitRate: 128000,
-            linearPCMBitDepth: 16,
-            linearPCMIsBigEndian: false,
-            linearPCMIsFloat: false,
-          },
-          web: {
-            mimeType: 'audio/webm;codecs=opus',
-            bitsPerSecond: 128000,
-          },
-        });
-      }
+      await newRecording.prepareToRecordAsync({
+        android: {
+          extension: '.m4a',
+          outputFormat: Audio.AndroidOutputFormat.MPEG_4,
+          audioEncoder: Audio.AndroidAudioEncoder.AAC,
+          sampleRate: 44100,
+          numberOfChannels: 2,
+          bitRate: 128000,
+        },
+        ios: {
+          extension: '.wav',
+          outputFormat: Audio.IOSOutputFormat.LINEARPCM,
+          audioQuality: Audio.IOSAudioQuality.HIGH,
+          sampleRate: 44100,
+          numberOfChannels: 2,
+          bitRate: 128000,
+          linearPCMBitDepth: 16,
+          linearPCMIsBigEndian: false,
+          linearPCMIsFloat: false,
+        },
+        web: {
+          mimeType: 'audio/webm;codecs=opus',
+          bitsPerSecond: 128000,
+        },
+      });
 
       await newRecording.startAsync();
       setRecording(newRecording);
@@ -92,9 +79,11 @@ export default function RecordScreen() {
       if (Platform.OS !== 'web') {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       }
+      
+      console.log('Recording started successfully');
     } catch (error) {
-      console.error("Failed to start recording", error);
-      Alert.alert("Error", "Failed to start recording");
+      console.error("Failed to start recording:", error);
+      Alert.alert("Error", "Failed to start recording. Please try again.");
     }
   };
 
@@ -102,6 +91,8 @@ export default function RecordScreen() {
     if (!recording) return;
 
     try {
+      console.log('Stopping recording...');
+      
       await recording.stopAndUnloadAsync();
       
       if (Platform.OS !== 'web') {
@@ -116,9 +107,11 @@ export default function RecordScreen() {
         throw new Error("Recording URI is null");
       }
 
+      console.log('Recording URI:', uri);
+
       const duration = startTime ? Date.now() - startTime : 0;
       const uriParts = uri.split('.');
-      const fileType = uriParts[uriParts.length - 1];
+      const fileType = uriParts[uriParts.length - 1] || 'wav';
 
       // Generate a unique ID using timestamp and random number
       const uniqueId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -132,13 +125,28 @@ export default function RecordScreen() {
         fileType,
       };
 
+      console.log('Saving recording:', {
+        id: newRecording.id,
+        duration: newRecording.duration,
+        fileType: newRecording.fileType,
+        title: newRecording.title,
+        userId: user?.id
+      });
+
       addRecording(newRecording);
+      
       setRecording(null);
       setIsRecording(false);
       setStartTime(null);
+      
+      console.log('Recording saved successfully');
+      
+      // Show success message
+      Alert.alert("Success", "Recording saved successfully!");
+      
     } catch (error) {
-      console.error("Failed to stop recording", error);
-      Alert.alert("Error", "Failed to stop recording");
+      console.error("Failed to stop recording:", error);
+      Alert.alert("Error", "Failed to stop recording. Please try again.");
     }
   };
 
@@ -179,6 +187,18 @@ export default function RecordScreen() {
               ? "Tap to stop recording" 
               : "Tap to start recording"}
           </Text>
+          
+          {/* Debug info */}
+          {user && (
+            <Text style={styles.debugText}>
+              Signed in as: {user.email}
+            </Text>
+          )}
+          {!isAuthenticated && (
+            <Text style={styles.debugText}>
+              Please sign in to record audio
+            </Text>
+          )}
 
           <View style={styles.buttonContainer}>
             <RecordButton 
@@ -228,5 +248,11 @@ const styles = StyleSheet.create({
   },
   buttonContainer: {
     marginBottom: 40,
+  },
+  debugText: {
+    fontSize: 12,
+    color: "rgba(255, 255, 255, 0.6)",
+    textAlign: "center",
+    marginTop: 10,
   },
 });
