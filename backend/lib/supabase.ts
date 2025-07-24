@@ -1,20 +1,25 @@
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://nwwymvufvcwcqpzftxzs.supabase.co';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im53d3ltdnVmdmN3Y3FwemZ0eHpzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTMxNzkxMjUsImV4cCI6MjA2ODc1NTEyNX0.mjlWwH3QwBOJt_K2UzZyeRbKbUbi2wGIdWqT-EACmHU';
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im53d3ltdnVmdmN3Y3FwemZ0eHpzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTMxNzkxMjUsImV4cCI6MjA2ODc1NTEyNX0.mjlWwH3QwBOJt_K2UzZyeRbKbUbi2wGIdWqT-EACmHU';
 
-if (!supabaseUrl) {
-  throw new Error('Missing SUPABASE_URL or EXPO_PUBLIC_SUPABASE_URL environment variable');
-}
+// Service role key for admin operations (backend only)
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-if (!supabaseServiceKey) {
-  throw new Error('Missing SUPABASE_SERVICE_ROLE_KEY environment variable');
-}
-
-// Use service role key for backend operations
-export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: true,
-    persistSession: true
-  }
+    persistSession: true,
+    detectSessionInUrl: false,
+  },
 });
+
+// Admin client for backend operations (only use in backend/server-side code)
+export const supabaseAdmin = supabaseServiceKey 
+  ? createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    })
+  : supabase; // Fallback to regular client if service key not available
