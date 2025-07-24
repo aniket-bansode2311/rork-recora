@@ -12,7 +12,7 @@ import TranscriptionModal from "@/components/TranscriptionModal";
 import { Recording } from "@/types/recording";
 
 export default function HistoryScreen() {
-  const { recordings, deleteRecording, addRecording, updateRecording, isLoading } = useRecordings();
+  const { recordings, deleteRecording, addRecording, updateRecording, isLoading, error } = useRecordings();
   const { colors } = useTheme();
   const { transcribeAudio, transcribeAndTranslateAudio, transcribeWithSpeakers, isTranscribing, isDiarizing, isTranslating } = useTranscription();
   const [sound, setSound] = useState<Audio.Sound | null>(null);
@@ -227,10 +227,20 @@ export default function HistoryScreen() {
     index === self.findIndex(r => r.id === recording.id)
   );
 
+  // Debug logging
+  console.log('HISTORY_SCREEN_RENDER: Current state:', {
+    recordingsCount: recordings.length,
+    safeRecordingsCount: safeRecordings.length,
+    isLoading,
+    hasError: !!error,
+    errorMessage: error?.message
+  });
+
   if (isLoading) {
     return (
       <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color={colors.purple.primary} />
+        <Text style={[styles.loadingText, { color: colors.purple.primary }]}>Loading recordings...</Text>
       </View>
     );
   }
@@ -309,6 +319,11 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+  },
+  loadingText: {
+    fontSize: 16,
+    marginTop: 16,
+    textAlign: "center",
   },
   emptyContainer: {
     flex: 1,

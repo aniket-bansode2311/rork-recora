@@ -40,11 +40,17 @@ export const [RecordingsProvider, useRecordings] = createContextHook(() => {
   // Create recording mutation
   const createMutation = trpc.recordings.create.useMutation({
     onMutate: async (newRecording) => {
+      console.log('CREATE_MUTATION_MUTATE: Starting optimistic update...', {
+        recordingId: newRecording.id,
+        userId: newRecording.userId
+      });
+      
       // Cancel outgoing refetches
       await queryClient.cancelQueries({ queryKey: [['recordings', 'list'], { input: { userId: user?.id || '' } }] });
       
       // Snapshot previous value
       const previousRecordings = queryClient.getQueryData([['recordings', 'list'], { input: { userId: user?.id || '' } }]);
+      console.log('CREATE_MUTATION_MUTATE: Previous recordings count:', Array.isArray(previousRecordings) ? previousRecordings.length : 0);
       
       // Optimistically update
       const optimisticRecording: Recording = {
@@ -61,16 +67,25 @@ export const [RecordingsProvider, useRecordings] = createContextHook(() => {
       
       queryClient.setQueryData([['recordings', 'list'], { input: { userId: user?.id || '' } }], (old: Recording[] | undefined) => {
         const oldData = old || [];
-        return deduplicateRecordings([optimisticRecording, ...oldData]);
+        const updated = deduplicateRecordings([optimisticRecording, ...oldData]);
+        console.log('CREATE_MUTATION_MUTATE: Optimistic update applied, new count:', updated.length);
+        return updated;
       });
       
+      console.log('CREATE_MUTATION_MUTATE: Optimistic update completed');
       return { previousRecordings, optimisticRecording };
     },
     onSuccess: (data, variables, context) => {
+      console.log('CREATE_MUTATION_SUCCESS: Recording saved to database successfully:', {
+        recordingId: data.recording.id,
+        title: data.recording.title,
+        userId: variables.userId
+      });
+      
       // Update with server data
       queryClient.setQueryData([['recordings', 'list'], { input: { userId: user?.id || '' } }], (old: Recording[] | undefined) => {
         const oldData = old || [];
-        return deduplicateRecordings(oldData.map(r => r.id === variables.id ? {
+        const updated = deduplicateRecordings(oldData.map(r => r.id === variables.id ? {
           id: data.recording.id,
           uri: data.recording.uri,
           duration: data.recording.duration,
@@ -81,18 +96,27 @@ export const [RecordingsProvider, useRecordings] = createContextHook(() => {
           speakerSegments: data.recording.speakerSegments,
           speakers: data.recording.speakers,
         } : r));
+        console.log('CREATE_MUTATION_SUCCESS: Server data applied, final count:', updated.length);
+        return updated;
       });
     },
     onError: async (error, variables, context) => {
-      console.warn("Failed to save recording to database, saving locally:", error);
+      console.error('CREATE_MUTATION_ERROR: Failed to save recording to database:', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        recordingId: variables.id,
+        userId: variables.userId,
+        stack: error instanceof Error ? error.stack : undefined
+      });
       
       // Revert optimistic update
       if (context?.previousRecordings) {
+        console.log('CREATE_MUTATION_ERROR: Reverting optimistic update...');
         queryClient.setQueryData([['recordings', 'list'], { input: { userId: user?.id || '' } }], context.previousRecordings);
       }
       
       // Fallback to local storage
       try {
+        console.log('CREATE_MUTATION_ERROR: Attempting local storage fallback...');
         const currentRecordings = recordings;
         const newRecording: Recording = {
           id: variables.id,
@@ -108,8 +132,12 @@ export const [RecordingsProvider, useRecordings] = createContextHook(() => {
         const updated = deduplicateRecordings([newRecording, ...currentRecordings]);
         await AsyncStorage.setItem(getStorageKey(), JSON.stringify(updated));
         setRecordings(updated);
+        console.log('CREATE_MUTATION_ERROR: Local storage fallback successful, count:', updated.length);
       } catch (storageError) {
-        console.error("Failed to save to local storage:", storageError);
+        console.error('CREATE_MUTATION_ERROR: Local storage fallback also failed:', {
+          storageError: storageError instanceof Error ? storageError.message : 'Unknown error',
+          recordingId: variables.id
+        });
       }
     }
   });
@@ -243,31 +271,51 @@ export const [RecordingsProvider, useRecordings] = createContextHook(() => {
   }, [user?.id]);
 
   const addRecording = (recording: Recording) => {
+    console.log('ADD_RECORDING: Starting addRecording process...');
+    
     if (!user?.id) {
-      console.error("Cannot add recording: user not authenticated", { user });
-      return;
+      console.error('ADD_RECORDING_ERROR: User not authenticated', { 
+        user: user ? { id: user.id, email: user.email } : null,
+        isAuthenticated: !!user?.id
+      });
+      throw new Error('User not authenticated - cannot save recording');
     }
     
-    console.log('Adding recording to database:', {
-      id: recording.id,
+    console.log('ADD_RECORDING: User authenticated, preparing mutation data:', {
+      recordingId: recording.id,
       uri: recording.uri,
       duration: recording.duration,
       title: recording.title,
       fileType: recording.fileType,
       userId: user.id,
+      userEmail: user.email,
+      hasTranscription: !!recording.transcription,
+      hasSpeakerSegments: !!recording.speakerSegments,
+      hasSpeakers: !!recording.speakers
     });
     
-    createMutation.mutate({
-      id: recording.id,
-      uri: recording.uri,
-      duration: recording.duration,
-      title: recording.title,
-      fileType: recording.fileType,
-      transcription: recording.transcription,
-      speakerSegments: recording.speakerSegments,
-      speakers: recording.speakers,
-      userId: user.id,
-    });
+    try {
+      console.log('ADD_RECORDING: Calling createMutation.mutate...');
+      createMutation.mutate({
+        id: recording.id,
+        uri: recording.uri,
+        duration: recording.duration,
+        title: recording.title,
+        fileType: recording.fileType,
+        transcription: recording.transcription,
+        speakerSegments: recording.speakerSegments,
+        speakers: recording.speakers,
+        userId: user.id,
+      });
+      console.log('ADD_RECORDING: Mutation called successfully');
+    } catch (mutationError) {
+      console.error('ADD_RECORDING_ERROR: Failed to call mutation:', {
+        error: mutationError instanceof Error ? mutationError.message : 'Unknown error',
+        stack: mutationError instanceof Error ? mutationError.stack : undefined,
+        recordingId: recording.id
+      });
+      throw mutationError;
+    }
   };
 
   const deleteRecording = (id: string) => {

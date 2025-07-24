@@ -278,9 +278,9 @@ export function useTranscription() {
       
       // Process ElevenLabs response format
       if (result.segments && Array.isArray(result.segments)) {
-        const speakerList = result.segments
+        const speakerList: string[] = result.segments
           .map((seg: any) => seg.speaker)
-          .filter((speaker: any): speaker is string => typeof speaker === 'string' && speaker.length > 0) as string[];
+          .filter((speaker: any): speaker is string => typeof speaker === 'string' && speaker.length > 0);
         const speakers: string[] = [...new Set(speakerList)];
         
         let translatedSegments = result.segments;
