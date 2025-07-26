@@ -239,12 +239,7 @@ export default function RecordingItem({
               ]}
             >
               <FileText size={20} color={colors.purple.primary} />
-              <View style={styles.optionContent}>
-                <Text style={[styles.optionTitle, { color: colors.text }]}>Multi-Language Transcription</Text>
-                <Text style={[styles.optionDescription, { color: colors.darkGray }]}>
-                  Auto-detect language and translate to English
-                </Text>
-              </View>
+              <Text style={[styles.optionTitle, { color: colors.text }]}>Basic Transcription</Text>
             </Pressable>
 
             <Pressable
@@ -256,12 +251,7 @@ export default function RecordingItem({
               ]}
             >
               <Users size={20} color={colors.purple.primary} />
-              <View style={styles.optionContent}>
-                <Text style={[styles.optionTitle, { color: colors.text }]}>Multi-Language Speaker Diarization</Text>
-                <Text style={[styles.optionDescription, { color: colors.darkGray }]}>
-                  Identify speakers with language detection and translation
-                </Text>
-              </View>
+              <Text style={[styles.optionTitle, { color: colors.text }]}>Speaker Diarization</Text>
             </Pressable>
 
             <Pressable
@@ -415,21 +405,15 @@ const styles = StyleSheet.create({
   optionButton: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     padding: 16,
     borderRadius: 12,
     marginBottom: 12,
   },
-  optionContent: {
-    marginLeft: 12,
-    flex: 1,
-  },
   optionTitle: {
     fontSize: 16,
     fontWeight: "600",
-    marginBottom: 4,
-  },
-  optionDescription: {
-    fontSize: 14,
+    marginLeft: 8,
   },
   cancelButton: {
     padding: 12,

@@ -9,6 +9,7 @@ import { useTheme } from "@/hooks/use-theme";
 import { useTranscription } from "@/hooks/use-transcription";
 import RecordingItem from "@/components/RecordingItem";
 import TranscriptionModal from "@/components/TranscriptionModal";
+import RecordingDetailModal from "@/components/RecordingDetailModal";
 import { Recording } from "@/types/recording";
 
 export default function HistoryScreen() {
@@ -21,6 +22,7 @@ export default function HistoryScreen() {
   const [uploading, setUploading] = useState(false);
   const [selectedRecording, setSelectedRecording] = useState<Recording | null>(null);
   const [showTranscriptionModal, setShowTranscriptionModal] = useState(false);
+  const [showDetailModal, setShowDetailModal] = useState(false);
 
   // Clean up audio when component unmounts or loses focus
   useFocusEffect(
@@ -47,55 +49,9 @@ export default function HistoryScreen() {
   }, [sound]);
 
   const handlePlay = async (recording: Recording) => {
-    try {
-      // If this is the same recording that's currently loaded
-      if (playingId === recording.id && sound) {
-        if (isPaused) {
-          // Resume the paused audio
-          await sound.playAsync();
-          setIsPaused(false);
-          return;
-        } else {
-          // Pause the currently playing audio
-          await sound.pauseAsync();
-          setIsPaused(true);
-          return;
-        }
-      }
-
-      // Stop and cleanup current sound if playing a different recording
-      if (sound) {
-        await sound.unloadAsync();
-        setSound(null);
-        setPlayingId(null);
-        setIsPaused(false);
-      }
-
-      // Create and play new sound for the selected recording
-      const { sound: newSound } = await Audio.Sound.createAsync(
-        { uri: recording.uri },
-        { shouldPlay: true }
-      );
-      
-      setSound(newSound);
-      setPlayingId(recording.id);
-      setIsPaused(false);
-      
-      // Set up playback status listener
-      newSound.setOnPlaybackStatusUpdate((status) => {
-        if (status.isLoaded) {
-          if (status.didJustFinish) {
-            // Audio finished playing
-            setPlayingId(null);
-            setIsPaused(false);
-            setSound(null);
-          }
-        }
-      });
-    } catch (error) {
-      console.error("Error playing sound:", error);
-      Alert.alert("Error", "Failed to play recording");
-    }
+    // Open the detail modal instead of playing directly
+    setSelectedRecording(recording);
+    setShowDetailModal(true);
   };
 
   const handleDelete = (id: string) => {
@@ -373,6 +329,21 @@ export default function HistoryScreen() {
           setShowTranscriptionModal(false);
           setSelectedRecording(null);
         }}
+      />
+
+      <RecordingDetailModal
+        visible={showDetailModal}
+        recording={selectedRecording}
+        onClose={() => {
+          setShowDetailModal(false);
+          setSelectedRecording(null);
+        }}
+        onDelete={handleDelete}
+        onTranscribe={(recording) => {
+          setShowDetailModal(false);
+          handleTranscribeWithSpeakers(recording);
+        }}
+        isTranscribing={selectedRecording ? (isTranscribing === selectedRecording.id || isTranslating === selectedRecording.id || isDiarizing === selectedRecording.id) : false}
       />
     </View>
   );

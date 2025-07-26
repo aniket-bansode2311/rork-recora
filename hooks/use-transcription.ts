@@ -405,12 +405,25 @@ export function useTranscription() {
         let speakerCounter = 0;
         const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
         
+        // First, collect all unique speakers from the segments
+        const uniqueSpeakers = new Set<string>();
         result.segments.forEach((seg: any) => {
-          if (seg.speaker && !speakerMap.has(seg.speaker)) {
-            const speakerLabel = `Speaker ${alphabet[speakerCounter % alphabet.length]}`;
-            speakerMap.set(seg.speaker, speakerLabel);
-            speakerCounter++;
+          if (seg.speaker) {
+            uniqueSpeakers.add(seg.speaker);
           }
+        });
+        
+        // Create mapping for each unique speaker
+        Array.from(uniqueSpeakers).sort().forEach((speaker) => {
+          const speakerLabel = `Speaker ${alphabet[speakerCounter % alphabet.length]}`;
+          speakerMap.set(speaker, speakerLabel);
+          speakerCounter++;
+        });
+        
+        console.log('DEBUG: Speaker mapping:', {
+          uniqueSpeakers: Array.from(uniqueSpeakers),
+          speakerMap: Object.fromEntries(speakerMap),
+          totalSegments: result.segments.length
         });
         
         const speakers: string[] = Array.from(speakerMap.values());
@@ -473,15 +486,23 @@ export function useTranscription() {
         
         const fullText = result.segments.map((seg: any) => `${seg.speaker}: ${seg.text}`).join('\n');
         
+        const processedSegments = translatedSegments.map((seg: any) => ({
+          speaker: speakerMap.get(seg.speaker) || `Speaker ${seg.speaker || 'Unknown'}`,
+          text: seg.text || '',
+          translated_text: seg.translated_text,
+          start_time: seg.start_time || 0,
+          end_time: seg.end_time || 0,
+          language: seg.language
+        }));
+        
+        console.log('DEBUG: Processed segments:', {
+          segmentCount: processedSegments.length,
+          speakers: speakers,
+          sampleSegments: processedSegments.slice(0, 3)
+        });
+        
         return {
-          segments: translatedSegments.map((seg: any) => ({
-            speaker: speakerMap.get(seg.speaker) || 'Unknown Speaker',
-            text: seg.text || '',
-            translated_text: seg.translated_text,
-            start_time: seg.start_time || 0,
-            end_time: seg.end_time || 0,
-            language: seg.language
-          })),
+          segments: processedSegments,
           speakers,
           full_text: fullText,
           translated_full_text: translatedFullText || fullText,

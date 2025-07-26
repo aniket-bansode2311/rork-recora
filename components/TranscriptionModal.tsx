@@ -53,6 +53,29 @@ export default function TranscriptionModal({ visible, recording, onClose }: Tran
     }
   };
 
+  const copySegmentToClipboard = async (segment: any, mode: 'original' | 'translated') => {
+    try {
+      const textToCopy = mode === 'translated' && segment.translated_text 
+        ? segment.translated_text 
+        : segment.text;
+      
+      if (textToCopy.trim()) {
+        await Clipboard.setStringAsync(`${segment.speaker}: ${textToCopy}`);
+        // Show success feedback
+        if (Platform.OS === 'ios') {
+          setTimeout(() => {
+            Alert.alert('Copied!', 'Speaker segment copied to clipboard', [], { cancelable: true });
+          }, 100);
+        } else {
+          Alert.alert('Copied!', 'Speaker segment copied to clipboard');
+        }
+      }
+    } catch (error) {
+      console.error('Error copying segment to clipboard:', error);
+      Alert.alert('Error', 'Failed to copy segment to clipboard.');
+    }
+  };
+
   const formatTime = (seconds: number) => {
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = Math.floor(seconds % 60);
@@ -250,6 +273,16 @@ export default function TranscriptionModal({ visible, recording, onClose }: Tran
                           <Text style={[styles.timestamp, { color: colors.darkGray }]}>
                             {formatTime(segment.start_time)} - {formatTime(segment.end_time)}
                           </Text>
+                          <Pressable
+                            onPress={() => copySegmentToClipboard(segment, languageMode)}
+                            style={({ pressed }) => [
+                              styles.segmentCopyButton,
+                              { backgroundColor: colors.purple.primary },
+                              pressed && styles.pressed
+                            ]}
+                          >
+                            <Copy size={12} color="#fff" />
+                          </Pressable>
                         </View>
                         <Text style={[styles.speakerText, { color: colors.text }]}>
                           {displayText}
@@ -507,6 +540,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 22,
     marginLeft: 20,
+  },
+  segmentCopyButton: {
+    padding: 4,
+    borderRadius: 4,
+    marginLeft: 8,
   },
   speakerSummary: {
     padding: 20,
