@@ -7,6 +7,7 @@ import { Recording } from "@/types/recording";
 interface RecordingItemProps {
   recording: Recording;
   onPlay: (recording: Recording) => void;
+  onAudioClick?: (recording: Recording) => void;
   onDelete: (id: string) => void;
   onRename?: (id: string, newTitle: string) => void;
   onTranscribe?: (recording: Recording) => void;
@@ -20,6 +21,7 @@ interface RecordingItemProps {
 export default function RecordingItem({ 
   recording, 
   onPlay, 
+  onAudioClick,
   onDelete,
   onRename,
   onTranscribe,
@@ -109,7 +111,10 @@ export default function RecordingItem({
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={styles.infoContainer}>
+      <Pressable 
+        style={styles.infoContainer}
+        onPress={() => onAudioClick && onAudioClick(recording)}
+      >
         {isEditing ? (
           <View style={styles.editContainer}>
             <TextInput
@@ -173,7 +178,7 @@ export default function RecordingItem({
             </View>
           )}
         </View>
-      </View>
+      </Pressable>
       
       <View style={styles.actionsContainer}>
         {onRename && !isEditing && (

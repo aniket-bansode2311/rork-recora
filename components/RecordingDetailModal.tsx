@@ -3,6 +3,8 @@ import { StyleSheet, Text, View, Modal, Pressable, Alert, Platform } from "react
 import { ArrowLeft, Trash2, Share, Sparkles, Pause, Play } from "lucide-react-native";
 import { Audio } from "expo-av";
 import * as Sharing from "expo-sharing";
+import Animated, { useSharedValue, useAnimatedStyle, useAnimatedGestureHandler, runOnJS } from "react-native-reanimated";
+import { PanGestureHandler, GestureHandlerRootView } from "react-native-gesture-handler";
 import { useTheme } from "@/hooks/use-theme";
 import { Recording } from "@/types/recording";
 
@@ -29,6 +31,8 @@ export default function RecordingDetailModal({
   const [isPaused, setIsPaused] = useState(false);
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const progressX = useSharedValue(0);
 
   useEffect(() => {
     return () => {
@@ -46,8 +50,10 @@ export default function RecordingDetailModal({
       setIsPaused(false);
       setPosition(0);
       setDuration(0);
+      setIsDragging(false);
+      progressX.value = 0;
     }
-  }, [visible, sound]);
+  }, [visible, sound, progressX]);
 
   const formatTime = (milliseconds: number) => {
     const totalSeconds = Math.floor(milliseconds / 1000);
@@ -84,13 +90,18 @@ export default function RecordingDetailModal({
         // Set up playback status listener
         newSound.setOnPlaybackStatusUpdate((status) => {
           if (status.isLoaded) {
-            setPosition(status.positionMillis || 0);
+            if (!isDragging) {
+              setPosition(status.positionMillis || 0);
+              const progress = (status.positionMillis || 0) / Math.max(status.durationMillis || 1, 1);
+              progressX.value = progress;
+            }
             setDuration(status.durationMillis || 0);
             
             if (status.didJustFinish) {
               setIsPlaying(false);
               setIsPaused(false);
               setPosition(0);
+              progressX.value = 0;
             }
           }
         });
@@ -100,11 +111,19 @@ export default function RecordingDetailModal({
           await sound.pauseAsync();
           setIsPaused(true);
           setIsPlaying(false);
-        } else {
-          // Resume or play
+        } else if (isPaused) {
+          // Resume
           await sound.playAsync();
           setIsPlaying(true);
           setIsPaused(false);
+        } else {
+          // Restart from beginning if finished
+          await sound.setPositionAsync(0);
+          await sound.playAsync();
+          setIsPlaying(true);
+          setIsPaused(false);
+          setPosition(0);
+          progressX.value = 0;
         }
       }
     } catch (error) {
@@ -162,10 +181,40 @@ export default function RecordingDetailModal({
     onTranscribe(recording);
   };
 
-  const getProgressPercentage = () => {
-    if (duration === 0) return 0;
-    return (position / duration) * 100;
+  const seekToPosition = async (progress: number) => {
+    if (sound && duration > 0) {
+      const newPosition = progress * duration;
+      await sound.setPositionAsync(newPosition);
+      setPosition(newPosition);
+    }
   };
+
+  const panGestureHandler = useAnimatedGestureHandler({
+    onStart: () => {
+      runOnJS(setIsDragging)(true);
+    },
+    onActive: (event) => {
+      const progress = Math.max(0, Math.min(1, event.x / 300)); // Assuming 300px width
+      progressX.value = progress;
+      runOnJS(setPosition)(progress * duration);
+    },
+    onEnd: () => {
+      runOnJS(setIsDragging)(false);
+      runOnJS(seekToPosition)(progressX.value);
+    },
+  });
+
+  const progressBarStyle = useAnimatedStyle(() => {
+    return {
+      width: `${progressX.value * 100}%`,
+    };
+  });
+
+  const progressThumbStyle = useAnimatedStyle(() => {
+    return {
+      left: `${progressX.value * 100}%`,
+    };
+  });
 
   if (!recording) return null;
 
@@ -199,19 +248,19 @@ export default function RecordingDetailModal({
           <Text style={styles.title}>{recording.title}</Text>
           <Text style={styles.date}>{formatDate(new Date(recording.createdAt))}</Text>
           
-          {/* Audio Visualizer Placeholder */}
+          {/* Audio Visualizer with Draggable Progress */}
           <View style={styles.visualizerContainer}>
-            <View style={styles.visualizer}>
-              {/* Progress bar */}
-              <View style={styles.progressContainer}>
-                <View 
-                  style={[
-                    styles.progressBar, 
-                    { width: `${getProgressPercentage()}%` }
-                  ]} 
-                />
-              </View>
-            </View>
+            <GestureHandlerRootView style={styles.gestureContainer}>
+              <PanGestureHandler onGestureEvent={panGestureHandler}>
+                <Animated.View style={styles.visualizer}>
+                  <View style={styles.progressContainer}>
+                    <View style={styles.progressTrack} />
+                    <Animated.View style={[styles.progressBar, progressBarStyle]} />
+                    <Animated.View style={[styles.progressThumb, progressThumbStyle]} />
+                  </View>
+                </Animated.View>
+              </PanGestureHandler>
+            </GestureHandlerRootView>
           </View>
           
           {/* Time Display */}
@@ -333,23 +382,51 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 20,
   },
-  visualizer: {
+  gestureContainer: {
     width: "90%",
+    height: 60,
+  },
+  visualizer: {
+    width: "100%",
     height: 60,
     backgroundColor: "rgba(255, 255, 255, 0.1)",
     borderRadius: 8,
     justifyContent: "center",
-    overflow: "hidden",
+    position: "relative",
   },
   progressContainer: {
     width: "100%",
     height: "100%",
     justifyContent: "center",
+    position: "relative",
+  },
+  progressTrack: {
+    width: "100%",
+    height: "100%",
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
+    borderRadius: 8,
+    position: "absolute",
   },
   progressBar: {
     height: "100%",
-    backgroundColor: "rgba(255, 255, 255, 0.3)",
+    backgroundColor: "rgba(255, 255, 255, 0.4)",
     borderRadius: 8,
+    position: "absolute",
+  },
+  progressThumb: {
+    width: 20,
+    height: 20,
+    backgroundColor: "#fff",
+    borderRadius: 10,
+    position: "absolute",
+    top: "50%",
+    marginTop: -10,
+    marginLeft: -10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
   timeContainer: {
     flexDirection: "row",

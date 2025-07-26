@@ -207,9 +207,45 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
   };
 
   const clearAllNotes = async () => {
-    setNotes([]);
-    if (user?.id) {
+    try {
+      console.log('CLEAR_ALL_NOTES: Starting clear all process...');
+      
+      if (!user?.id) {
+        console.warn('CLEAR_ALL_NOTES: User not authenticated');
+        return;
+      }
+
+      // Get all current note IDs to delete from database
+      const noteIds = currentNotes.map(n => n.id);
+      console.log('CLEAR_ALL_NOTES: Deleting notes:', noteIds);
+      
+      // Clear local state immediately for better UX
+      setNotes([]);
+      
+      // Clear local storage
       await AsyncStorage.removeItem(getStorageKey());
+      console.log('CLEAR_ALL_NOTES: Local storage cleared');
+      
+      // Delete each note from database
+      for (const noteId of noteIds) {
+        try {
+          await deleteMutation.mutateAsync({ id: noteId, userId: user.id });
+          console.log('CLEAR_ALL_NOTES: Deleted note from database:', noteId);
+        } catch (deleteError) {
+          console.warn('CLEAR_ALL_NOTES: Failed to delete note from database:', noteId, deleteError);
+        }
+      }
+      
+      // Invalidate queries to trigger refetch
+      queryClient.invalidateQueries({ queryKey: [['notes', 'list']] });
+      console.log('CLEAR_ALL_NOTES: Queries invalidated');
+      
+    } catch (error) {
+      console.error('CLEAR_ALL_NOTES_ERROR: Failed to clear notes:', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        userId: user?.id
+      });
+      throw error;
     }
   };
 

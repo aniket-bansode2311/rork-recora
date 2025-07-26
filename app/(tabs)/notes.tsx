@@ -1,7 +1,7 @@
 import React, { useState } from "react";
-import { StyleSheet, Text, View, Pressable, ScrollView, Alert } from "react-native";
+import { StyleSheet, Text, View, Pressable, Alert, ActivityIndicator, FlatList } from "react-native";
 import { Stack } from "expo-router";
-import { Plus, FileText, Clock } from "lucide-react-native";
+import { Plus, FileText, Trash2 } from "lucide-react-native";
 import { useTheme } from "@/hooks/use-theme";
 import { useNotes } from "@/hooks/use-notes";
 import NoteCard from "@/components/NoteCard";
@@ -11,7 +11,7 @@ import { Note } from "@/types/note";
 
 export default function NotesScreen() {
   const { colors } = useTheme();
-  const { notes, isLoading } = useNotes();
+  const { notes, isLoading, clearAllNotes } = useNotes();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedNote, setSelectedNote] = useState<Note | null>(null);
 
@@ -27,6 +27,34 @@ export default function NotesScreen() {
     setSelectedNote(null);
   };
 
+  const handleClearAll = () => {
+    if (notes.length === 0) {
+      Alert.alert("No Notes", "There are no notes to clear.");
+      return;
+    }
+
+    Alert.alert(
+      "Clear All Notes",
+      `Are you sure you want to delete all ${notes.length} note${notes.length === 1 ? '' : 's'}? This action cannot be undone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Clear All", 
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await clearAllNotes();
+              Alert.alert("Success", "All notes have been cleared.");
+            } catch (error) {
+              console.error("Error clearing notes:", error);
+              Alert.alert("Error", "Failed to clear notes. Please try again.");
+            }
+          }
+        },
+      ]
+    );
+  };
+
   if (selectedNote) {
     return (
       <NoteEditor 
@@ -36,81 +64,83 @@ export default function NotesScreen() {
     );
   }
 
+  if (isLoading) {
+    return (
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.purple.primary} />
+        <Text style={[styles.loadingText, { color: colors.purple.primary }]}>Loading notes...</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <Stack.Screen 
         options={{ 
-          title: "AI Notes",
-          headerTitleStyle: [styles.headerTitle, { color: colors.purple.primary }],
+          title: "Notes",
+          headerTitleStyle: [styles.screenHeaderTitle, { color: colors.text }],
           headerStyle: {
             backgroundColor: colors.background,
           },
-          headerRight: () => (
-            <Pressable
-              onPress={handleCreateNote}
-              style={({ pressed }) => [
-                styles.headerCreateButton,
-                { backgroundColor: colors.purple.primary },
-                pressed && styles.pressed
-              ]}
-            >
-              <Plus size={20} color="#fff" />
-            </Pressable>
-          ),
         }} 
       />
 
-      {notes.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <FileText size={64} color={colors.purple.light} />
-          <Text style={[styles.emptyTitle, { color: colors.purple.primary }]}>
-            No Notes Yet
-          </Text>
-          <Text style={[styles.emptySubtext, { color: colors.darkGray }]}>
-            Create AI-powered notes from your audio transcriptions
-          </Text>
+      {/* Header Section */}
+      <View style={[styles.headerSection, { backgroundColor: colors.purple.primary }]}>
+        <Text style={styles.headerTitle}>Your AI Notes</Text>
+        <Text style={styles.noteCount}>
+          {notes.length} note{notes.length === 1 ? '' : 's'}
+        </Text>
+        
+        <View style={styles.actionButtons}>
           <Pressable
             onPress={handleCreateNote}
             style={({ pressed }) => [
-              styles.emptyCreateButton,
-              { backgroundColor: colors.purple.primary },
-              pressed && styles.pressed
+              styles.createButton,
+              { backgroundColor: 'rgba(255, 255, 255, 0.2)' },
+              pressed && styles.buttonPressed
             ]}
           >
             <Plus size={20} color="#fff" style={styles.buttonIcon} />
-            <Text style={styles.emptyCreateButtonText}>Create Your First Note</Text>
+            <Text style={styles.buttonText}>Create Note</Text>
           </Pressable>
-        </View>
-      ) : (
-        <View style={styles.notesContainer}>
-          <View style={styles.createNoteSection}>
+          
+          {notes.length > 0 && (
             <Pressable
-              onPress={handleCreateNote}
+              onPress={handleClearAll}
               style={({ pressed }) => [
-                styles.createNoteButton,
-                { backgroundColor: colors.purple.primary },
-                pressed && styles.pressed
+                styles.clearButton,
+                { backgroundColor: 'rgba(255, 255, 255, 0.2)' },
+                pressed && styles.buttonPressed
               ]}
             >
-              <Plus size={18} color="#fff" style={styles.createButtonIcon} />
-              <Text style={styles.createNoteButtonText}>Create New Note</Text>
+              <Trash2 size={20} color="#fff" style={styles.buttonIcon} />
+              <Text style={styles.buttonText}>Clear All</Text>
             </Pressable>
-          </View>
-          
-          <ScrollView 
-            style={styles.notesList}
-            contentContainerStyle={styles.notesListContent}
-            showsVerticalScrollIndicator={false}
-          >
-            {notes.map((note) => (
-              <NoteCard
-                key={note.id}
-                note={note}
-                onPress={() => handleNoteSelect(note)}
-              />
-            ))}
-          </ScrollView>
+          )}
         </View>
+      </View>
+
+      {notes.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Text style={[styles.emptyText, { color: colors.text }]}>No notes yet</Text>
+          <Text style={[styles.emptySubtext, { color: colors.darkGray }]}>
+            Create AI-powered notes from your audio transcriptions
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={notes}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <NoteCard
+              note={item}
+              onPress={() => handleNoteSelect(item)}
+            />
+          )}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+        />
       )}
 
       <CreateNoteModal
@@ -125,48 +155,70 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  headerTitle: {
+  screenHeaderTitle: {
     fontWeight: "600",
   },
-  headerCreateButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  loadingContainer: {
+    flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 4,
   },
-  notesContainer: {
-    flex: 1,
+  loadingText: {
+    fontSize: 16,
+    marginTop: 16,
+    textAlign: "center",
   },
-  createNoteSection: {
-    padding: 16,
-    paddingBottom: 8,
+  headerSection: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 30,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
   },
-  createNoteButton: {
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: "700",
+    color: "#fff",
+    marginBottom: 8,
+  },
+  noteCount: {
+    fontSize: 16,
+    color: "rgba(255, 255, 255, 0.8)",
+    marginBottom: 20,
+  },
+  actionButtons: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  createButton: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     borderRadius: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    flex: 1,
+    justifyContent: "center",
   },
-  createButtonIcon: {
+  clearButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    flex: 1,
+    justifyContent: "center",
+  },
+  buttonPressed: {
+    opacity: 0.8,
+    transform: [{ scale: 0.98 }],
+  },
+  buttonIcon: {
     marginRight: 8,
   },
-  createNoteButtonText: {
+  buttonText: {
     color: "#fff",
     fontSize: 16,
     fontWeight: "600",
-  },
-  pressed: {
-    opacity: 0.8,
-    transform: [{ scale: 0.95 }],
   },
   emptyContainer: {
     flex: 1,
@@ -174,38 +226,19 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: 40,
   },
-  emptyTitle: {
+  emptyText: {
     fontSize: 24,
-    fontWeight: "600",
-    marginTop: 20,
-    marginBottom: 8,
+    fontWeight: "700",
+    marginBottom: 12,
+    textAlign: "center",
   },
   emptySubtext: {
     fontSize: 16,
     textAlign: "center",
-    marginBottom: 40,
     lineHeight: 22,
   },
-  emptyCreateButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-    borderRadius: 12,
-  },
-  buttonIcon: {
-    marginRight: 8,
-  },
-  emptyCreateButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  notesList: {
-    flex: 1,
-  },
-  notesListContent: {
-    padding: 16,
-    paddingTop: 0,
+  listContent: {
+    padding: 20,
+    paddingTop: 16,
   },
 });

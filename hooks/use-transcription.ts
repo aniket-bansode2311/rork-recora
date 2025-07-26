@@ -405,25 +405,36 @@ export function useTranscription() {
         let speakerCounter = 0;
         const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
         
-        // First, collect all unique speakers from the segments
+        // First, collect all unique speakers from the segments and sort them
         const uniqueSpeakers = new Set<string>();
         result.segments.forEach((seg: any) => {
           if (seg.speaker) {
-            uniqueSpeakers.add(seg.speaker);
+            // Normalize speaker names to handle variations
+            const normalizedSpeaker = seg.speaker.toString().trim();
+            uniqueSpeakers.add(normalizedSpeaker);
           }
         });
         
+        // Sort speakers to ensure consistent mapping
+        const sortedSpeakers = Array.from(uniqueSpeakers).sort((a, b) => {
+          // Try to extract numbers from speaker names for proper sorting
+          const aNum = parseInt(a.replace(/\D/g, '')) || 0;
+          const bNum = parseInt(b.replace(/\D/g, '')) || 0;
+          return aNum - bNum || a.localeCompare(b);
+        });
+        
         // Create mapping for each unique speaker
-        Array.from(uniqueSpeakers).sort().forEach((speaker) => {
+        sortedSpeakers.forEach((speaker) => {
           const speakerLabel = `Speaker ${alphabet[speakerCounter % alphabet.length]}`;
           speakerMap.set(speaker, speakerLabel);
           speakerCounter++;
         });
         
         console.log('DEBUG: Speaker mapping:', {
-          uniqueSpeakers: Array.from(uniqueSpeakers),
+          uniqueSpeakers: sortedSpeakers,
           speakerMap: Object.fromEntries(speakerMap),
-          totalSegments: result.segments.length
+          totalSegments: result.segments.length,
+          segmentSpeakers: result.segments.map((seg: any) => seg.speaker)
         });
         
         const speakers: string[] = Array.from(speakerMap.values());
@@ -486,14 +497,19 @@ export function useTranscription() {
         
         const fullText = result.segments.map((seg: any) => `${seg.speaker}: ${seg.text}`).join('\n');
         
-        const processedSegments = translatedSegments.map((seg: any) => ({
-          speaker: speakerMap.get(seg.speaker) || `Speaker ${seg.speaker || 'Unknown'}`,
-          text: seg.text || '',
-          translated_text: seg.translated_text,
-          start_time: seg.start_time || 0,
-          end_time: seg.end_time || 0,
-          language: seg.language
-        }));
+        const processedSegments = translatedSegments.map((seg: any) => {
+          const normalizedSpeaker = seg.speaker ? seg.speaker.toString().trim() : 'Unknown';
+          const mappedSpeaker = speakerMap.get(normalizedSpeaker) || `Speaker ${normalizedSpeaker}`;
+          
+          return {
+            speaker: mappedSpeaker,
+            text: seg.text || '',
+            translated_text: seg.translated_text,
+            start_time: seg.start_time || 0,
+            end_time: seg.end_time || 0,
+            language: seg.language
+          };
+        });
         
         console.log('DEBUG: Processed segments:', {
           segmentCount: processedSegments.length,

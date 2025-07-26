@@ -1,6 +1,8 @@
 import React from "react";
-import { StyleSheet, Text, View, Pressable } from "react-native";
-import { Clock, FileText, Mic } from "lucide-react-native";
+import { StyleSheet, Text, View, Pressable, Alert, Platform } from "react-native";
+import { Clock, FileText, Mic, Share, Copy } from "lucide-react-native";
+import * as Clipboard from "expo-clipboard";
+import * as Sharing from "expo-sharing";
 import { useTheme } from "@/hooks/use-theme";
 import { Note } from "@/types/note";
 
@@ -11,6 +13,54 @@ interface NoteCardProps {
 
 export default function NoteCard({ note, onPress }: NoteCardProps) {
   const { colors } = useTheme();
+
+  const handleShare = async (e: any) => {
+    e.stopPropagation();
+    try {
+      if (Platform.OS === 'web') {
+        // For web, copy to clipboard as sharing is limited
+        await handleCopy(e);
+        return;
+      }
+      
+      const isAvailable = await Sharing.isAvailableAsync();
+      if (isAvailable) {
+        const shareContent = `${note.title}\n\n${getPlainTextContent(note.content)}`;
+        await Sharing.shareAsync(shareContent, {
+          dialogTitle: `Share ${note.title}`,
+        });
+      } else {
+        Alert.alert("Error", "Sharing is not available on this device");
+      }
+    } catch (error) {
+      console.error("Error sharing note:", error);
+      Alert.alert("Error", "Failed to share note");
+    }
+  };
+
+  const handleCopy = async (e: any) => {
+    e.stopPropagation();
+    try {
+      const textToCopy = `${note.title}\n\n${getPlainTextContent(note.content)}`;
+      await Clipboard.setStringAsync(textToCopy);
+      
+      // Show success feedback
+      if (Platform.OS === 'ios') {
+        setTimeout(() => {
+          Alert.alert('Copied!', 'Note copied to clipboard', [], { cancelable: true });
+        }, 100);
+      } else {
+        Alert.alert('Copied!', 'Note copied to clipboard');
+      }
+    } catch (error) {
+      console.error('Error copying note:', error);
+      Alert.alert('Error', 'Failed to copy note to clipboard.');
+    }
+  };
+
+  const getPlainTextContent = (content: string) => {
+    return content.replace(/<[^>]*>/g, '').replace(/\n/g, ' ').trim();
+  };
 
   const formatDate = (date: Date) => {
     const now = new Date();
@@ -62,14 +112,38 @@ export default function NoteCard({ note, onPress }: NoteCardProps) {
           <Text style={[styles.metadataText, { color: colors.darkGray }]}>
             Updated {formatDate(note.updatedAt)}
           </Text>
+          
+          {note.recordingId && (
+            <View style={[styles.recordingBadge, { backgroundColor: colors.purple.light }]}>
+              <Mic size={12} color="#fff" />
+              <Text style={styles.recordingBadgeText}>From Audio</Text>
+            </View>
+          )}
         </View>
         
-        {note.recordingId && (
-          <View style={[styles.recordingBadge, { backgroundColor: colors.purple.light }]}>
-            <Mic size={12} color="#fff" />
-            <Text style={styles.recordingBadgeText}>From Audio</Text>
-          </View>
-        )}
+        <View style={styles.actionButtons}>
+          <Pressable
+            onPress={handleCopy}
+            style={({ pressed }) => [
+              styles.actionButton,
+              { backgroundColor: colors.lightGray },
+              pressed && styles.actionButtonPressed
+            ]}
+          >
+            <Copy size={16} color={colors.purple.primary} />
+          </Pressable>
+          
+          <Pressable
+            onPress={handleShare}
+            style={({ pressed }) => [
+              styles.actionButton,
+              { backgroundColor: colors.lightGray },
+              pressed && styles.actionButtonPressed
+            ]}
+          >
+            <Share size={16} color={colors.purple.primary} />
+          </Pressable>
+        </View>
       </View>
     </Pressable>
   );
@@ -125,6 +199,7 @@ const styles = StyleSheet.create({
   metadata: {
     flexDirection: "row",
     alignItems: "center",
+    flex: 1,
   },
   metadataText: {
     fontSize: 12,
@@ -136,11 +211,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
+    marginLeft: 8,
   },
   recordingBadgeText: {
     color: "#fff",
     fontSize: 10,
     fontWeight: "600",
     marginLeft: 4,
+  },
+  actionButtons: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  actionButton: {
+    padding: 8,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  actionButtonPressed: {
+    opacity: 0.7,
+    transform: [{ scale: 0.95 }],
   },
 });

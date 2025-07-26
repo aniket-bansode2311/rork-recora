@@ -257,6 +257,10 @@ export const [RecordingsProvider, useRecordings] = createContextHook(() => {
         return;
       }
 
+      // Get all current recording IDs to delete from database
+      const recordingIds = currentRecordings.map(r => r.id);
+      console.log('CLEAR_ALL_RECORDINGS: Deleting recordings:', recordingIds);
+      
       // Clear local state immediately for better UX
       setRecordings([]);
       
@@ -264,12 +268,19 @@ export const [RecordingsProvider, useRecordings] = createContextHook(() => {
       await AsyncStorage.removeItem(getStorageKey());
       console.log('CLEAR_ALL_RECORDINGS: Local storage cleared');
       
+      // Delete each recording from database
+      for (const recordingId of recordingIds) {
+        try {
+          await deleteMutation.mutateAsync({ id: recordingId, userId: user.id });
+          console.log('CLEAR_ALL_RECORDINGS: Deleted recording from database:', recordingId);
+        } catch (deleteError) {
+          console.warn('CLEAR_ALL_RECORDINGS: Failed to delete recording from database:', recordingId, deleteError);
+        }
+      }
+      
       // Invalidate queries to trigger refetch
       queryClient.invalidateQueries({ queryKey: [['recordings', 'list']] });
       console.log('CLEAR_ALL_RECORDINGS: Queries invalidated');
-      
-      // Note: In a real app, you might want to call a backend endpoint to clear all recordings
-      // For now, we're just clearing the local data
       
     } catch (error) {
       console.error('CLEAR_ALL_RECORDINGS_ERROR: Failed to clear recordings:', {

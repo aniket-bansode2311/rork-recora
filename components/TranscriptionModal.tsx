@@ -21,11 +21,10 @@ export default function TranscriptionModal({ visible, recording, onClose }: Tran
       let textToCopy = '';
       
       if (viewMode === 'speakers' && recording?.speakerSegments) {
-        if (languageMode === 'translated' && recording.translatedTranscription) {
-          textToCopy = recording.translatedTranscription;
-        } else {
-          textToCopy = recording.speakerSegments.map(seg => `${seg.speaker}: ${languageMode === 'translated' && seg.translated_text ? seg.translated_text : seg.text}`).join('\n');
-        }
+        textToCopy = recording.speakerSegments.map(seg => {
+          const text = languageMode === 'translated' && seg.translated_text ? seg.translated_text : seg.text;
+          return `${seg.speaker}: ${text}`;
+        }).join('\n');
       } else {
         textToCopy = languageMode === 'translated' && recording?.translatedTranscription 
           ? recording.translatedTranscription 
@@ -35,15 +34,7 @@ export default function TranscriptionModal({ visible, recording, onClose }: Tran
       if (textToCopy.trim()) {
         await Clipboard.setStringAsync(textToCopy);
         // Show success feedback
-        if (Platform.OS === 'ios') {
-          // On iOS, we can show a brief alert
-          setTimeout(() => {
-            Alert.alert('Copied!', 'Text copied to clipboard', [], { cancelable: true });
-          }, 100);
-        } else {
-          // On Android, show toast-like alert
-          Alert.alert('Copied!', 'Text copied to clipboard');
-        }
+        Alert.alert('Copied!', 'Transcription copied to clipboard');
       } else {
         Alert.alert('Nothing to Copy', 'No transcription text available to copy.');
       }
@@ -61,14 +52,7 @@ export default function TranscriptionModal({ visible, recording, onClose }: Tran
       
       if (textToCopy.trim()) {
         await Clipboard.setStringAsync(`${segment.speaker}: ${textToCopy}`);
-        // Show success feedback
-        if (Platform.OS === 'ios') {
-          setTimeout(() => {
-            Alert.alert('Copied!', 'Speaker segment copied to clipboard', [], { cancelable: true });
-          }, 100);
-        } else {
-          Alert.alert('Copied!', 'Speaker segment copied to clipboard');
-        }
+        Alert.alert('Copied!', 'Speaker segment copied to clipboard');
       }
     } catch (error) {
       console.error('Error copying segment to clipboard:', error);

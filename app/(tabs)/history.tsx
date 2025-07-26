@@ -49,7 +49,13 @@ export default function HistoryScreen() {
   }, [sound]);
 
   const handlePlay = async (recording: Recording) => {
-    // Open the detail modal instead of playing directly
+    // Open the detail modal for both play button and audio click
+    setSelectedRecording(recording);
+    setShowDetailModal(true);
+  };
+
+  const handleAudioClick = async (recording: Recording) => {
+    // Also open detail modal when clicking on audio
     setSelectedRecording(recording);
     setShowDetailModal(true);
   };
@@ -307,6 +313,7 @@ export default function HistoryScreen() {
             <RecordingItem
               recording={item}
               onPlay={handlePlay}
+              onAudioClick={handleAudioClick}
               onDelete={handleDelete}
               onRename={handleRename}
               onTranscribe={handleTranscribe}
