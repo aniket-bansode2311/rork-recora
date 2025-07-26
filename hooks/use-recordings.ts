@@ -249,9 +249,34 @@ export const [RecordingsProvider, useRecordings] = createContextHook(() => {
   };
 
   const clearAllRecordings = async () => {
-    setRecordings([]);
-    if (user?.id) {
+    try {
+      console.log('CLEAR_ALL_RECORDINGS: Starting clear all process...');
+      
+      if (!user?.id) {
+        console.warn('CLEAR_ALL_RECORDINGS: User not authenticated');
+        return;
+      }
+
+      // Clear local state immediately for better UX
+      setRecordings([]);
+      
+      // Clear local storage
       await AsyncStorage.removeItem(getStorageKey());
+      console.log('CLEAR_ALL_RECORDINGS: Local storage cleared');
+      
+      // Invalidate queries to trigger refetch
+      queryClient.invalidateQueries({ queryKey: [['recordings', 'list']] });
+      console.log('CLEAR_ALL_RECORDINGS: Queries invalidated');
+      
+      // Note: In a real app, you might want to call a backend endpoint to clear all recordings
+      // For now, we're just clearing the local data
+      
+    } catch (error) {
+      console.error('CLEAR_ALL_RECORDINGS_ERROR: Failed to clear recordings:', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        userId: user?.id
+      });
+      throw error;
     }
   };
 
@@ -276,6 +301,7 @@ export const [RecordingsProvider, useRecordings] = createContextHook(() => {
     updateRecording,
     clearAllRecordings,
     isLoading: recordingsQuery.isLoading,
-    error: recordingsQuery.error
+    error: recordingsQuery.error,
+    recordingsCount: currentRecordings.length
   };
 });

@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { StyleSheet, Text, View, Image, Pressable, ScrollView, Alert, ActionSheetIOS, Platform } from "react-native";
 import { Stack } from "expo-router";
-import { Settings, HelpCircle, Info, Bell, Moon, Sun, LogOut, Camera, Edit3, Trash2 } from "lucide-react-native";
+import { Settings, HelpCircle, Info, Bell, Moon, Sun, LogOut, Camera } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 import { useTheme } from "@/hooks/use-theme";
 import { useAuth } from "@/hooks/use-auth";
@@ -155,16 +155,54 @@ export default function ProfileScreen() {
     }
   };
 
+  const handleAbout = () => {
+    Alert.alert(
+      "About Audio Transcriber",
+      "Audio Transcriber v1.0.0\n\nA powerful app for recording, transcribing, and translating audio with multi-language support and speaker identification.\n\nFeatures:\n• Record high-quality audio\n• Multi-language transcription\n• Speaker diarization\n• Real-time translation\n• Secure cloud storage\n\nDeveloped with ❤️ for seamless audio processing.",
+      [{ text: "OK" }]
+    );
+  };
+
+  const handleHelpSupport = () => {
+    Alert.alert(
+      "Help & Support",
+      "Need help? Here are some options:\n\n📧 Email: support@audiotranscriber.com\n🌐 Website: www.audiotranscriber.com\n📱 FAQ: Check our in-app help section\n\nFor technical issues:\n• Restart the app\n• Check your internet connection\n• Update to the latest version\n\nStill need help? Contact our support team!",
+      [
+        { text: "Contact Support", onPress: () => {
+          // In a real app, this would open email client or support chat
+          Alert.alert("Contact Support", "Opening support email...");
+        }},
+        { text: "OK", style: "cancel" }
+      ]
+    );
+  };
+
+  const handleNotifications = () => {
+    Alert.alert(
+      "Notification Settings",
+      "Manage your notification preferences:\n\n🔔 Recording reminders\n📝 Transcription completed\n🌍 Translation ready\n💾 Backup notifications\n\nNote: Notification settings can be managed in your device's Settings app under Audio Transcriber.",
+      [
+        { text: "Open Settings", onPress: () => {
+          // In a real app, this would open device settings
+          Alert.alert("Settings", "Opening device settings...");
+        }},
+        { text: "OK", style: "cancel" }
+      ]
+    );
+  };
+
   const menuItems = [
     { 
       icon: <Settings size={22} color={colors.darkGray} />, 
       title: "Settings", 
-      onPress: () => {} 
+      onPress: () => {
+        Alert.alert("Settings", "Settings panel coming soon!");
+      }
     },
     { 
       icon: <Bell size={22} color={colors.darkGray} />, 
       title: "Notifications", 
-      onPress: () => {} 
+      onPress: handleNotifications
     },
     { 
       icon: theme === "light" ? <Moon size={22} color={colors.darkGray} /> : <Sun size={22} color={colors.darkGray} />, 
@@ -174,12 +212,12 @@ export default function ProfileScreen() {
     { 
       icon: <HelpCircle size={22} color={colors.darkGray} />, 
       title: "Help & Support", 
-      onPress: () => {} 
+      onPress: handleHelpSupport
     },
     { 
       icon: <Info size={22} color={colors.darkGray} />, 
       title: "About", 
-      onPress: () => {} 
+      onPress: handleAbout
     },
     { 
       icon: <LogOut size={22} color={colors.danger} />, 

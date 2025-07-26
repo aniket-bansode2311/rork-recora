@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { StyleSheet, Text, View, Modal, Pressable, ScrollView } from "react-native";
+import { StyleSheet, Text, View, Modal, Pressable, ScrollView, Alert, Platform } from "react-native";
 import { X, Copy, Users, FileText, Globe, Languages } from "lucide-react-native";
 import * as Clipboard from "expo-clipboard";
 import { useTheme } from "@/hooks/use-theme";
@@ -17,22 +17,39 @@ export default function TranscriptionModal({ visible, recording, onClose }: Tran
   const [languageMode, setLanguageMode] = useState<'original' | 'translated'>('translated');
 
   const copyToClipboard = async () => {
-    let textToCopy = '';
-    
-    if (viewMode === 'speakers' && recording?.speakerSegments) {
-      if (languageMode === 'translated' && recording.translatedTranscription) {
-        textToCopy = recording.translatedTranscription;
+    try {
+      let textToCopy = '';
+      
+      if (viewMode === 'speakers' && recording?.speakerSegments) {
+        if (languageMode === 'translated' && recording.translatedTranscription) {
+          textToCopy = recording.translatedTranscription;
+        } else {
+          textToCopy = recording.speakerSegments.map(seg => `${seg.speaker}: ${languageMode === 'translated' && seg.translated_text ? seg.translated_text : seg.text}`).join('\n');
+        }
       } else {
-        textToCopy = recording.speakerSegments.map(seg => `${seg.speaker}: ${languageMode === 'translated' && seg.translated_text ? seg.translated_text : seg.text}`).join('\n');
+        textToCopy = languageMode === 'translated' && recording?.translatedTranscription 
+          ? recording.translatedTranscription 
+          : recording?.transcription || '';
       }
-    } else {
-      textToCopy = languageMode === 'translated' && recording?.translatedTranscription 
-        ? recording.translatedTranscription 
-        : recording?.transcription || '';
-    }
-    
-    if (textToCopy) {
-      await Clipboard.setStringAsync(textToCopy);
+      
+      if (textToCopy.trim()) {
+        await Clipboard.setStringAsync(textToCopy);
+        // Show success feedback
+        if (Platform.OS === 'ios') {
+          // On iOS, we can show a brief alert
+          setTimeout(() => {
+            Alert.alert('Copied!', 'Text copied to clipboard', [], { cancelable: true });
+          }, 100);
+        } else {
+          // On Android, show toast-like alert
+          Alert.alert('Copied!', 'Text copied to clipboard');
+        }
+      } else {
+        Alert.alert('Nothing to Copy', 'No transcription text available to copy.');
+      }
+    } catch (error) {
+      console.error('Error copying to clipboard:', error);
+      Alert.alert('Error', 'Failed to copy text to clipboard.');
     }
   };
 

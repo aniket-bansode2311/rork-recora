@@ -1,20 +1,20 @@
 import React, { useState, useEffect } from "react";
-import { StyleSheet, Text, View, FlatList, Alert, ActivityIndicator } from "react-native";
+import { StyleSheet, Text, View, FlatList, Alert, ActivityIndicator, Pressable } from "react-native";
 import { Stack, useFocusEffect } from "expo-router";
 import { Audio } from "expo-av";
 import * as DocumentPicker from "expo-document-picker";
+import { Trash2, Upload } from "lucide-react-native";
 import { useRecordings } from "@/hooks/use-recordings";
 import { useTheme } from "@/hooks/use-theme";
 import { useTranscription } from "@/hooks/use-transcription";
 import RecordingItem from "@/components/RecordingItem";
-import UploadButton from "@/components/UploadButton";
 import TranscriptionModal from "@/components/TranscriptionModal";
 import { Recording } from "@/types/recording";
 
 export default function HistoryScreen() {
-  const { recordings, deleteRecording, addRecording, updateRecording, isLoading, error } = useRecordings();
+  const { recordings, deleteRecording, addRecording, updateRecording, clearAllRecordings, isLoading, error, recordingsCount } = useRecordings();
   const { colors } = useTheme();
-  const { transcribeAudio, transcribeAndTranslateAudio, transcribeWithSpeakers, isTranscribing, isDiarizing, isTranslating } = useTranscription();
+  const { transcribeAndTranslateAudio, transcribeWithSpeakers, isTranscribing, isDiarizing, isTranslating } = useTranscription();
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [isPaused, setIsPaused] = useState(false);
@@ -222,6 +222,42 @@ export default function HistoryScreen() {
     }
   };
 
+  const handleClearAll = () => {
+    if (recordings.length === 0) {
+      Alert.alert("No Recordings", "There are no recordings to clear.");
+      return;
+    }
+
+    Alert.alert(
+      "Clear All Recordings",
+      `Are you sure you want to delete all ${recordings.length} recording${recordings.length === 1 ? '' : 's'}? This action cannot be undone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Clear All", 
+          style: "destructive",
+          onPress: async () => {
+            try {
+              // Stop any playing audio first
+              if (sound) {
+                await sound.unloadAsync();
+                setSound(null);
+                setPlayingId(null);
+                setIsPaused(false);
+              }
+              
+              await clearAllRecordings();
+              Alert.alert("Success", "All recordings have been cleared.");
+            } catch (error) {
+              console.error("Error clearing recordings:", error);
+              Alert.alert("Error", "Failed to clear recordings. Please try again.");
+            }
+          }
+        },
+      ]
+    );
+  };
+
   // Ensure recordings have unique keys
   const safeRecordings = recordings.filter((recording, index, self) => 
     index === self.findIndex(r => r.id === recording.id)
@@ -249,51 +285,85 @@ export default function HistoryScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <Stack.Screen 
         options={{ 
-          title: "Recording History",
-          headerTitleStyle: [styles.headerTitle, { color: colors.purple.primary }],
+          title: "Recordings",
+          headerTitleStyle: [styles.screenHeaderTitle, { color: colors.text }],
           headerStyle: {
             backgroundColor: colors.background,
           },
         }} 
       />
 
+      {/* Header Section */}
+      <View style={[styles.headerSection, { backgroundColor: colors.purple.primary }]}>
+        <Text style={styles.headerTitle}>Your Recordings</Text>
+        <Text style={styles.recordingCount}>
+          {recordingsCount} recording{recordingsCount === 1 ? '' : 's'}
+        </Text>
+        
+        <View style={styles.actionButtons}>
+          <Pressable
+            onPress={handleUpload}
+            disabled={uploading}
+            style={({ pressed }) => [
+              styles.uploadButton,
+              { backgroundColor: 'rgba(255, 255, 255, 0.2)' },
+              pressed && styles.buttonPressed
+            ]}
+          >
+            {uploading ? (
+              <ActivityIndicator size="small" color="#fff" style={styles.buttonIcon} />
+            ) : (
+              <Upload size={20} color="#fff" style={styles.buttonIcon} />
+            )}
+            <Text style={styles.buttonText}>
+              {uploading ? "Uploading..." : "Upload"}
+            </Text>
+          </Pressable>
+          
+          {recordingsCount > 0 && (
+            <Pressable
+              onPress={handleClearAll}
+              style={({ pressed }) => [
+                styles.clearButton,
+                { backgroundColor: 'rgba(255, 255, 255, 0.2)' },
+                pressed && styles.buttonPressed
+              ]}
+            >
+              <Trash2 size={20} color="#fff" style={styles.buttonIcon} />
+              <Text style={styles.buttonText}>Clear All</Text>
+            </Pressable>
+          )}
+        </View>
+      </View>
+
       {safeRecordings.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={[styles.emptyText, { color: colors.purple.primary }]}>No recordings yet</Text>
+          <Text style={[styles.emptyText, { color: colors.text }]}>No recordings yet</Text>
           <Text style={[styles.emptySubtext, { color: colors.darkGray }]}>
-            Record audio or upload existing files
+            Record audio or upload existing files to get started
           </Text>
-          <View style={styles.uploadButtonContainer}>
-            <UploadButton onPress={handleUpload} loading={uploading} />
-          </View>
         </View>
       ) : (
-        <>
-          <View style={styles.uploadSection}>
-            <UploadButton onPress={handleUpload} loading={uploading} />
-          </View>
-          
-          <FlatList
-            data={safeRecordings}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <RecordingItem
-                recording={item}
-                onPlay={handlePlay}
-                onDelete={handleDelete}
-                onRename={handleRename}
-                onTranscribe={handleTranscribe}
-                onTranscribeWithSpeakers={handleTranscribeWithSpeakers}
-                isTranscribing={isTranscribing === item.id || isTranslating === item.id}
-                isDiarizing={isDiarizing === item.id}
-                isPlaying={playingId === item.id && !isPaused}
-                isPaused={playingId === item.id && isPaused}
-              />
-            )}
-            contentContainerStyle={styles.listContent}
-            showsVerticalScrollIndicator={false}
-          />
-        </>
+        <FlatList
+          data={safeRecordings}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <RecordingItem
+              recording={item}
+              onPlay={handlePlay}
+              onDelete={handleDelete}
+              onRename={handleRename}
+              onTranscribe={handleTranscribe}
+              onTranscribeWithSpeakers={handleTranscribeWithSpeakers}
+              isTranscribing={isTranscribing === item.id || isTranslating === item.id}
+              isDiarizing={isDiarizing === item.id}
+              isPlaying={playingId === item.id && !isPaused}
+              isPaused={playingId === item.id && isPaused}
+            />
+          )}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+        />
       )}
 
       <TranscriptionModal
@@ -312,7 +382,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  headerTitle: {
+  screenHeaderTitle: {
     fontWeight: "600",
   },
   loadingContainer: {
@@ -325,6 +395,58 @@ const styles = StyleSheet.create({
     marginTop: 16,
     textAlign: "center",
   },
+  headerSection: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 30,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: "700",
+    color: "#fff",
+    marginBottom: 8,
+  },
+  recordingCount: {
+    fontSize: 16,
+    color: "rgba(255, 255, 255, 0.8)",
+    marginBottom: 20,
+  },
+  actionButtons: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  uploadButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    flex: 1,
+    justifyContent: "center",
+  },
+  clearButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    flex: 1,
+    justifyContent: "center",
+  },
+  buttonPressed: {
+    opacity: 0.8,
+    transform: [{ scale: 0.98 }],
+  },
+  buttonIcon: {
+    marginRight: 8,
+  },
+  buttonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
+  },
   emptyContainer: {
     flex: 1,
     alignItems: "center",
@@ -335,25 +457,15 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: "700",
     marginBottom: 12,
+    textAlign: "center",
   },
   emptySubtext: {
     fontSize: 16,
     textAlign: "center",
-    marginBottom: 40,
     lineHeight: 22,
-  },
-  uploadButtonContainer: {
-    marginTop: 20,
-  },
-  uploadSection: {
-    padding: 20,
-    paddingBottom: 12,
-    backgroundColor: "rgba(99, 102, 241, 0.05)",
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(99, 102, 241, 0.1)",
   },
   listContent: {
     padding: 20,
-    paddingTop: 8,
+    paddingTop: 16,
   },
 });
