@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { StyleSheet, Text, View, Modal, Pressable, Alert, Platform } from "react-native";
-import { ArrowLeft, Trash2, Share, Sparkles, Pause, Play } from "lucide-react-native";
+import { ArrowLeft, Trash2, Share, Sparkles, Pause, Play, MessageCircle } from "lucide-react-native";
 import { Audio } from "expo-av";
 import * as Sharing from "expo-sharing";
+import { router } from "expo-router";
 import Animated, { useSharedValue, useAnimatedStyle, useAnimatedGestureHandler, runOnJS } from "react-native-reanimated";
 import { PanGestureHandler, GestureHandlerRootView } from "react-native-gesture-handler";
 import { useTheme } from "@/hooks/use-theme";
@@ -286,24 +287,42 @@ export default function RecordingDetailModal({
             </Pressable>
           </View>
           
-          {/* Transcribe Button */}
-          <Pressable
-            onPress={handleTranscribe}
-            disabled={isTranscribing}
-            style={({ pressed }) => [
-              styles.transcribeButton,
-              pressed && styles.transcribeButtonPressed,
-              isTranscribing && styles.transcribeButtonDisabled
-            ]}
-          >
-            <Sparkles size={20} color="#fff" style={styles.transcribeIcon} />
-            <Text style={styles.transcribeButtonText}>
-              {isTranscribing ? "Transcribing..." : "Transcribe with AI"}
-            </Text>
-          </Pressable>
+          {/* Action Buttons */}
+          <View style={styles.mainActionButtons}>
+            <Pressable
+              onPress={handleTranscribe}
+              disabled={isTranscribing}
+              style={({ pressed }) => [
+                styles.transcribeButton,
+                pressed && styles.transcribeButtonPressed,
+                isTranscribing && styles.transcribeButtonDisabled
+              ]}
+            >
+              <Sparkles size={20} color="#fff" style={styles.transcribeIcon} />
+              <Text style={styles.transcribeButtonText}>
+                {isTranscribing ? "Transcribing..." : "Transcribe with AI"}
+              </Text>
+            </Pressable>
+            
+            {(recording.transcription || recording.speakerSegments) && (
+              <Pressable
+                onPress={() => {
+                  onClose();
+                  router.push('/chat');
+                }}
+                style={({ pressed }) => [
+                  styles.chatWithAIButton,
+                  pressed && styles.chatWithAIButtonPressed
+                ]}
+              >
+                <MessageCircle size={20} color="#fff" style={styles.chatIcon} />
+                <Text style={styles.chatWithAIButtonText}>Chat with AI</Text>
+              </Pressable>
+            )}
+          </View>
           
           <Text style={styles.transcribeDescription}>
-            Get accurate transcription with speaker identification using advanced AI. Supports any language with automatic translation to English.
+            Get accurate transcription with speaker identification using advanced AI. Then chat with AI to analyze your content.
           </Text>
           
           {/* Action Buttons */}
@@ -520,6 +539,32 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.98 }],
   },
   actionButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  mainActionButtons: {
+    width: "100%",
+    alignItems: "center",
+    gap: 12,
+  },
+  chatWithAIButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(59, 130, 246, 0.8)",
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+    borderRadius: 25,
+    borderWidth: 1,
+    borderColor: "rgba(59, 130, 246, 0.3)",
+  },
+  chatWithAIButtonPressed: {
+    backgroundColor: "rgba(59, 130, 246, 0.9)",
+  },
+  chatIcon: {
+    marginRight: 8,
+  },
+  chatWithAIButtonText: {
     color: "#fff",
     fontSize: 16,
     fontWeight: "600",

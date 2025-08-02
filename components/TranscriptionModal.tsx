@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { StyleSheet, Text, View, Modal, Pressable, ScrollView, Alert, Platform } from "react-native";
-import { X, Copy, Users, FileText, Globe, Languages } from "lucide-react-native";
+import { X, Copy, Users, FileText, Globe, Languages, MessageCircle } from "lucide-react-native";
 import * as Clipboard from "expo-clipboard";
+import { router } from "expo-router";
 import { useTheme } from "@/hooks/use-theme";
 import { Recording } from "@/types/recording";
 
@@ -217,17 +218,34 @@ export default function TranscriptionModal({ visible, recording, onClose }: Tran
                 )}
               </View>
               {(recording.transcription || recording.translatedTranscription) && (
-                <Pressable
-                  onPress={copyToClipboard}
-                  style={({ pressed }) => [
-                    styles.copyButton,
-                    { backgroundColor: colors.purple.primary },
-                    pressed && styles.pressed
-                  ]}
-                >
-                  <Copy size={16} color="#fff" />
-                  <Text style={styles.copyButtonText}>Copy</Text>
-                </Pressable>
+                <View style={styles.actionButtonsContainer}>
+                  <Pressable
+                    onPress={() => {
+                      onClose();
+                      router.push('/chat');
+                    }}
+                    style={({ pressed }) => [
+                      styles.chatButton,
+                      { backgroundColor: colors.blue.primary },
+                      pressed && styles.pressed
+                    ]}
+                  >
+                    <MessageCircle size={16} color="#fff" />
+                    <Text style={styles.chatButtonText}>Chat</Text>
+                  </Pressable>
+                  
+                  <Pressable
+                    onPress={copyToClipboard}
+                    style={({ pressed }) => [
+                      styles.copyButton,
+                      { backgroundColor: colors.purple.primary },
+                      pressed && styles.pressed
+                    ]}
+                  >
+                    <Copy size={16} color="#fff" />
+                    <Text style={styles.copyButtonText}>Copy</Text>
+                  </Pressable>
+                </View>
               )}
             </View>
 
@@ -552,5 +570,22 @@ const styles = StyleSheet.create({
   },
   speakerSummaryText: {
     fontSize: 14,
+  },
+  actionButtonsContainer: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  chatButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  chatButtonText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "500",
+    marginLeft: 4,
   },
 });
