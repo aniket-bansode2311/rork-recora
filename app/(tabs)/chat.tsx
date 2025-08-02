@@ -97,19 +97,39 @@ export default function ChatScreen() {
         }
       ];
 
+      console.log('Sending request to AI API with messages:', messages.length);
+      console.log('Context length:', context.length);
+
+      // Add timeout to prevent hanging requests
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+      
       const response = await fetch('https://toolkit.rork.com/text/llm/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ messages }),
+        signal: controller.signal,
       });
+      
+      clearTimeout(timeoutId);
+
+      console.log('Response status:', response.status);
+      console.log('Response headers:', response.headers);
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        console.error('API Error Response:', errorText);
+        throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
       }
 
       const data = await response.json();
+      console.log('AI Response received:', data);
+      
+      if (!data.completion) {
+        throw new Error('Invalid response format: missing completion field');
+      }
       
       const assistantMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
@@ -126,7 +146,25 @@ export default function ChatScreen() {
 
     } catch (error) {
       console.error('Error sending message:', error);
-      Alert.alert('Error', 'Failed to send message. Please try again.');
+      
+      // More detailed error handling
+      let errorMessage = 'Failed to send message. Please try again.';
+      
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') {
+          errorMessage = 'Request timed out. Please try again with a shorter message.';
+        } else if (error.message.includes('Network request failed')) {
+          errorMessage = 'Network error. Please check your internet connection.';
+        } else if (error.message.includes('500')) {
+          errorMessage = 'Server error. The AI service is temporarily unavailable.';
+        } else if (error.message.includes('timeout')) {
+          errorMessage = 'Request timed out. Please try again.';
+        } else if (error.message.includes('413')) {
+          errorMessage = 'Request too large. Please try with less context or shorter messages.';
+        }
+      }
+      
+      Alert.alert('Error', errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -134,37 +172,65 @@ export default function ChatScreen() {
 
   const prepareContext = (): string => {
     let context = "";
+    const MAX_CONTEXT_LENGTH = 8000; // Limit context to prevent API issues
     
-    // Add recordings context
+    // Add recordings context (limit to most recent 5 recordings)
     if (recordings.length > 0) {
       context += "RECORDINGS:\n";
-      recordings.forEach((recording: Recording) => {
-        context += `\nTitle: ${recording.title}\n`;
-        context += `Date: ${new Date(recording.createdAt).toLocaleDateString()}\n`;
+      const recentRecordings = recordings.slice(0, 5);
+      
+      recentRecordings.forEach((recording: Recording) => {
+        const recordingContext = `\nTitle: ${recording.title}\nDate: ${new Date(recording.createdAt).toLocaleDateString()}\n`;
         
         if (recording.transcription) {
-          context += `Transcription: ${recording.transcription}\n`;
-        }
-        
-        if (recording.speakerSegments && recording.speakerSegments.length > 0) {
-          context += "Speaker Segments:\n";
+          // Limit transcription length to prevent context overflow
+          const transcription = recording.transcription.length > 1000 
+            ? recording.transcription.substring(0, 1000) + "...[truncated]"
+            : recording.transcription;
+          const transcriptionContext = `Transcription: ${transcription}\n`;
+          
+          if (context.length + recordingContext.length + transcriptionContext.length < MAX_CONTEXT_LENGTH) {
+            context += recordingContext + transcriptionContext;
+          }
+        } else if (recording.speakerSegments && recording.speakerSegments.length > 0) {
+          let speakerContext = "Speaker Segments:\n";
           recording.speakerSegments.forEach(segment => {
-            context += `${segment.speaker}: ${segment.text}\n`;
+            speakerContext += `${segment.speaker}: ${segment.text}\n`;
           });
+          
+          if (context.length + recordingContext.length + speakerContext.length < MAX_CONTEXT_LENGTH) {
+            context += recordingContext + speakerContext;
+          }
+        } else {
+          if (context.length + recordingContext.length < MAX_CONTEXT_LENGTH) {
+            context += recordingContext;
+          }
         }
         
         context += "---\n";
+        
+        // Break if we're approaching the limit
+        if (context.length > MAX_CONTEXT_LENGTH * 0.8) break;
       });
     }
     
-    // Add notes context
-    if (notes.length > 0) {
+    // Add notes context (limit to most recent 5 notes)
+    if (notes.length > 0 && context.length < MAX_CONTEXT_LENGTH * 0.9) {
       context += "\nNOTES:\n";
-      notes.forEach((note: Note) => {
-        context += `\nTitle: ${note.title}\n`;
-        context += `Content: ${note.content}\n`;
-        context += `Date: ${new Date(note.createdAt).toLocaleDateString()}\n`;
-        context += "---\n";
+      const recentNotes = notes.slice(0, 5);
+      
+      recentNotes.forEach((note: Note) => {
+        const noteContent = note.content.length > 500 
+          ? note.content.substring(0, 500) + "...[truncated]"
+          : note.content;
+          
+        const noteContext = `\nTitle: ${note.title}\nContent: ${noteContent}\nDate: ${new Date(note.createdAt).toLocaleDateString()}\n---\n`;
+        
+        if (context.length + noteContext.length < MAX_CONTEXT_LENGTH) {
+          context += noteContext;
+        } else {
+          break;
+        }
       });
     }
     
