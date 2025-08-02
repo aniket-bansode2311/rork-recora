@@ -179,7 +179,7 @@ export default function ChatScreen() {
       context += "RECORDINGS:\n";
       const recentRecordings = recordings.slice(0, 5);
       
-      recentRecordings.forEach((recording: Recording) => {
+      for (const recording of recentRecordings) {
         const recordingContext = `\nTitle: ${recording.title}\nDate: ${new Date(recording.createdAt).toLocaleDateString()}\n`;
         
         if (recording.transcription) {
@@ -211,7 +211,7 @@ export default function ChatScreen() {
         
         // Break if we're approaching the limit
         if (context.length > MAX_CONTEXT_LENGTH * 0.8) break;
-      });
+      }
     }
     
     // Add notes context (limit to most recent 5 notes)
@@ -219,7 +219,7 @@ export default function ChatScreen() {
       context += "\nNOTES:\n";
       const recentNotes = notes.slice(0, 5);
       
-      recentNotes.forEach((note: Note) => {
+      for (const note of recentNotes) {
         const noteContent = note.content.length > 500 
           ? note.content.substring(0, 500) + "...[truncated]"
           : note.content;
@@ -231,7 +231,7 @@ export default function ChatScreen() {
         } else {
           break;
         }
-      });
+      }
     }
     
     return context || "No recordings or notes available.";
